@@ -439,8 +439,19 @@ export default function SchedulerApp() {
     setDetailModal({ isOpen: false, appointment: null });
   };
 
-  // Toggle occasional tech visibility
+ // Toggle occasional tech visibility
   const toggleOccasionalTech = (techId) => {
+    const isCurrentlyShown = showOccasionalTechs[techId];
+    
+    // If trying to hide, check for appointments
+    if (isCurrentlyShown) {
+      const hasAppointments = dayAppointments.some(a => a.tech_id === techId);
+      if (hasAppointments) {
+        alert('Cannot hide column - tech has appointments scheduled. Move them first.');
+        return;
+      }
+    }
+    
     setShowOccasionalTechs(prev => ({
       ...prev,
       [techId]: !prev[techId]
