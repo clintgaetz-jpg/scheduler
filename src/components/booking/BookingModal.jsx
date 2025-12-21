@@ -124,6 +124,8 @@ export function BookingModal({
 
      const apptData = {
         // Customer fields
+       console.log('SAVE DEBUG - customer:', customer);
+      console.log('SAVE DEBUG - selectedVehicle:', selectedVehicle);
         customer_id: customer.id,
         customer_name: customer.file_as,
         customer_phone: customer.primary_phone,
