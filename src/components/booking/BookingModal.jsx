@@ -122,14 +122,14 @@ export function BookingModal({
       // Detect primary service category
       const primaryCategory = services[0] ? detectCategory(services[0].name) : 'general';
 
-      const apptData = {
+     const apptData = {
         // Customer fields
         customer_id: customer.id,
         customer_name: customer.file_as,
         customer_phone: customer.primary_phone,
         customer_phone_secondary: customer.secondary_phone || null,
         customer_email: customer.email || null,
-        customer_address: [customer.street, customer.city, customer.state].filter(Boolean).join(', ') || null,
+        customer_address: [customer.street, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || null,
         company_name: customer.company_name || null,
         protractor_contact_id: customer.protractor_contact_id,
         
@@ -142,6 +142,11 @@ export function BookingModal({
         vehicle_plate: selectedVehicle?.plate || null,
         vehicle_mileage: selectedVehicle?.last_mileage ? parseInt(selectedVehicle.last_mileage) : null,
         unit_number: selectedVehicle?.unit_number || null,
+        
+        // Change tracking
+        is_new_customer: customer.isNew || false,
+        is_new_vehicle: selectedVehicle?.isNew || false,
+        protractor_updates: Object.keys(updateNeeded).length > 0 ? updateNeeded : {},
         
         // Scheduling
         scheduled_date: formData.scheduled_date,
@@ -159,7 +164,6 @@ export function BookingModal({
         customer_request: formData.customer_request,
         source: 'manual'
       };
-
       let result;
       if (editingAppointment) {
         result = await updateAppointment(editingAppointment.id, apptData);
