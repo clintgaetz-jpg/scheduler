@@ -699,7 +699,7 @@ function Panel1Customer({
 }
 
 // ============================================
-// PANEL 2: VEHICLES - WITH ADD BUTTON, NO EXPAND ITEMS
+// PANEL 2: VEHICLES - WITH ADD BUTTON AND SORT
 // ============================================
 
 function Panel2Vehicles({
@@ -713,6 +713,37 @@ function Panel2Vehicles({
   onSearch,
   disabled
 }) {
+  const [sortBy, setSortBy] = useState('recent'); // recent, overdue, alpha
+
+  // Sort vehicles based on selected option
+  const sortedVehicles = useMemo(() => {
+    if (!vehicles || vehicles.length === 0) return [];
+    
+    const sorted = [...vehicles];
+    switch (sortBy) {
+      case 'overdue':
+        // Most overdue first (overdue > due_soon > recent), then by days
+        return sorted.sort((a, b) => {
+          const statusOrder = { overdue: 0, due_soon: 1, recent: 2 };
+          const aOrder = statusOrder[a.service_status] ?? 2;
+          const bOrder = statusOrder[b.service_status] ?? 2;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return (b.days_since_service || 0) - (a.days_since_service || 0);
+        });
+      case 'alpha':
+        // Alphabetical by year make model
+        return sorted.sort((a, b) => {
+          const aName = `${a.year} ${a.make} ${a.model}`.toLowerCase();
+          const bName = `${b.year} ${b.make} ${b.model}`.toLowerCase();
+          return aName.localeCompare(bName);
+        });
+      case 'recent':
+      default:
+        // Most recent service first (lowest days_since_service)
+        return sorted.sort((a, b) => (a.days_since_service || 999) - (b.days_since_service || 999));
+    }
+  }, [vehicles, sortBy]);
+
   if (disabled) {
     return (
       <div className="border-r border-gray-200 flex items-center justify-center bg-gray-50">
@@ -726,6 +757,28 @@ function Panel2Vehicles({
 
   return (
     <div className="border-r border-gray-200 flex flex-col overflow-hidden">
+      {/* Sort Buttons */}
+      <div className="px-2 py-1.5 border-b border-gray-200 flex gap-1 flex-shrink-0">
+        <button
+          onClick={() => setSortBy('recent')}
+          className={`px-2 py-0.5 text-xs rounded-full ${sortBy === 'recent' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+        >
+          Recent
+        </button>
+        <button
+          onClick={() => setSortBy('overdue')}
+          className={`px-2 py-0.5 text-xs rounded-full ${sortBy === 'overdue' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+        >
+          Overdue
+        </button>
+        <button
+          onClick={() => setSortBy('alpha')}
+          className={`px-2 py-0.5 text-xs rounded-full ${sortBy === 'alpha' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+        >
+          A-Z
+        </button>
+      </div>
+
       {/* Selected Vehicle Display */}
       {selectedVehicle && !selectedVehicle.isNew && (
         <div className="p-3 border-b border-gray-200 bg-blue-50 flex-shrink-0">
@@ -888,7 +941,7 @@ function Panel2Vehicles({
 
       {/* Vehicle List */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {vehicles.map((vehicle) => (
+        {sortedVehicles.map((vehicle) => (
           <VehicleCard
             key={vehicle.vin || vehicle.vehicle_id}
             vehicle={vehicle}
@@ -897,7 +950,7 @@ function Panel2Vehicles({
           />
         ))}
 
-        {vehicles.length === 0 && (
+        {sortedVehicles.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <Car size={24} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No vehicles found</p>
