@@ -121,16 +121,10 @@ export function BookingModal({
 
       // Detect primary service category
       const primaryCategory = services[0] ? detectCategory(services[0].name) : 'general';
-      
+
       console.log('SAVE DEBUG - customer:', customer);
       console.log('SAVE DEBUG - selectedVehicle:', selectedVehicle);
-
-      const apptData = {
-        // Customer fields
-        customer_id: customer.id,
-      const apptData = {
-        // Customer fields
-        customer_id: customer.id,
+      
       const apptData = {
         // Customer fields
         customer_id: customer.id,
