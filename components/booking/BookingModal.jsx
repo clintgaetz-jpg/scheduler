@@ -131,6 +131,9 @@ export function BookingModal({
       const apptData = {
         // Customer fields
         customer_id: customer.id,
+      const apptData = {
+        // Customer fields
+        customer_id: customer.id,
         customer_name: customer.file_as,
         customer_phone: customer.primary_phone,
         customer_phone_secondary: customer.secondary_phone || null,
