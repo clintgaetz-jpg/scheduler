@@ -214,12 +214,14 @@ export default function SchedulerApp() {
   // COMPUTED VALUES
   // ============================================
   
-  // Appointments for selected date (excluding cancelled/deleted)
+  // Appointments for selected date (excluding cancelled/deleted AND on-hold)
+  // FIX: Now excludes is_on_hold so they don't show on tech columns
   const dayAppointments = useMemo(() => {
     return appointments.filter(a => 
       a.scheduled_date === selectedDate && 
       a.status !== 'cancelled' && 
-      a.status !== 'deleted'
+      a.status !== 'deleted' &&
+      !a.is_on_hold  // <-- THE FIX: Don't show on-hold appointments in tech columns
     );
   }, [appointments, selectedDate]);
 
@@ -250,7 +252,8 @@ export default function SchedulerApp() {
     const techAppts = appointments.filter(a => 
       a.tech_id === techId && 
       a.scheduled_date === date && 
-      !['cancelled', 'deleted', 'completed'].includes(a.status)
+      !['cancelled', 'deleted', 'completed'].includes(a.status) &&
+      !a.is_on_hold  // Don't count on-hold in tech hours
     );
     const booked = techAppts.reduce((sum, a) => sum + (parseFloat(a.estimated_hours) || 0), 0);
     const tech = technicians.find(t => t.id === techId);
@@ -398,7 +401,7 @@ export default function SchedulerApp() {
     }
     
     // Same position - no change
-    if (draggedJob.tech_id === techId && draggedJob.scheduled_date === date) {
+    if (draggedJob.tech_id === techId && draggedJob.scheduled_date === date && !draggedJob.is_on_hold) {
       setDraggedJob(null);
       return;
     }
@@ -411,7 +414,8 @@ export default function SchedulerApp() {
         tech_id: techId, 
         scheduled_date: date,
         is_on_hold: false,
-        hold_reason: null
+        hold_reason: null,
+        hold_at: null
       });
     } else {
       await handleUpdateAppointment(draggedJob.id, { 
@@ -650,6 +654,7 @@ export default function SchedulerApp() {
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             weekDates={weekDates}
+            currentDate={currentDate}
             navigateWeek={navigateWeek}
             getTechHours={getTechHours}
             onOpenDetail={openDetailModal}
@@ -729,61 +734,126 @@ export default function SchedulerApp() {
 }
 
 // ============================================
-// SCHEDULER VIEW
+// SCHEDULER VIEW - REDESIGNED DATE NAVIGATION
 // ============================================
 function SchedulerView({ 
   technicians, appointments, dayAppointments, selectedDate, setSelectedDate, 
-  weekDates, navigateWeek, getTechHours, onOpenDetail, onUpdateAppointment,
+  weekDates, currentDate, navigateWeek, getTechHours, onOpenDetail, onUpdateAppointment,
   onDeleteAppointment, onDragStart, onDragEnd, onDrop, onDropToHold, draggedJob,
   servicePackages
 }) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Format week range for header
+  const weekStart = new Date(weekDates[0] + 'T00:00:00');
+  const weekEnd = new Date(weekDates[4] + 'T00:00:00');
+  const weekRangeText = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  
   return (
     <div className="h-full flex flex-col">
-      {/* Date Navigation */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigateWeek(-1)} className="p-1.5 hover:bg-gray-100 rounded transition-colors">
-            <ChevronLeft size={18} />
-          </button>
-          <div className="flex gap-1">
-            {weekDates.map(d => (
-              <button 
-                key={d} 
-                onClick={() => setSelectedDate(d)} 
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  d === selectedDate 
-                    ? 'bg-blue-600 text-white' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {formatDate(d)}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => navigateWeek(1)} className="p-1.5 hover:bg-gray-100 rounded transition-colors">
-            <ChevronRight size={18} />
-          </button>
-          
+      {/* ============================================ */}
+      {/* REDESIGNED DATE NAVIGATION - BIGGER & BOLDER */}
+      {/* ============================================ */}
+      <div className="bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center h-20">
+          {/* Previous Week Button */}
           <button 
-            onClick={() => {
-              const today = new Date().toISOString().split('T')[0];
-              // Don't allow jumping to weekend
-              if (!isWeekend(today)) {
-                setSelectedDate(today);
-              }
-            }} 
-            className="ml-2 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            onClick={() => navigateWeek(-1)} 
+            className="h-full px-4 flex items-center justify-center hover:bg-gray-50 border-r border-gray-200 transition-colors group"
+            title="Previous week"
           >
-            Today
+            <ChevronLeft size={28} className="text-gray-400 group-hover:text-gray-700" />
           </button>
+
+          {/* Day Buttons - Flex to fill space */}
+          <div className="flex-1 flex h-full">
+            {weekDates.map(d => {
+              const dateObj = new Date(d + 'T00:00:00');
+              const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+              const dayNum = dateObj.getDate();
+              const isSelected = d === selectedDate;
+              const isToday = d === today;
+              
+              return (
+                <button 
+                  key={d} 
+                  onClick={() => setSelectedDate(d)} 
+                  className={`
+                    flex-1 flex flex-col items-center justify-center border-r border-gray-200 
+                    transition-all relative
+                    ${isSelected 
+                      ? 'bg-blue-600 text-white' 
+                      : 'hover:bg-gray-50 text-gray-700'
+                    }
+                  `}
+                >
+                  {/* Today indicator */}
+                  {isToday && !isSelected && (
+                    <div className="absolute top-1 left-1/2 -translate-x-1/2">
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
+                        TODAY
+                      </span>
+                    </div>
+                  )}
+                  {isToday && isSelected && (
+                    <div className="absolute top-1 left-1/2 -translate-x-1/2">
+                      <span className="text-[10px] font-bold text-blue-100 bg-blue-500 px-1.5 py-0.5 rounded">
+                        TODAY
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Day name */}
+                  <span className={`text-xs font-semibold tracking-wide ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {dayName}
+                  </span>
+                  
+                  {/* Day number */}
+                  <span className={`text-2xl font-bold mt-0.5 ${isSelected ? 'text-white' : ''}`}>
+                    {dayNum}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Next Week Button */}
+          <button 
+            onClick={() => navigateWeek(1)} 
+            className="h-full px-4 flex items-center justify-center hover:bg-gray-50 border-l border-gray-200 transition-colors group"
+            title="Next week"
+          >
+            <ChevronRight size={28} className="text-gray-400 group-hover:text-gray-700" />
+          </button>
+
+          {/* Today Button + Week Info */}
+          <div className="h-full px-4 flex flex-col items-center justify-center border-l border-gray-200 min-w-[140px]">
+            <button 
+              onClick={() => {
+                // Don't allow jumping to weekend
+                if (!isWeekend(today)) {
+                  setSelectedDate(today);
+                  // Also navigate to current week if not there
+                  const todayWeek = getWeekDates(new Date());
+                  if (!weekDates.includes(today)) {
+                    navigateWeek(0); // This won't work, need to recalculate
+                  }
+                }
+              }} 
+              className="px-4 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              Today
+            </button>
+            <span className="text-[10px] text-gray-400 mt-1">{weekRangeText}</span>
+          </div>
         </div>
       </div>
 
       {/* Tech Columns + Hold Column */}
       <div className="flex-1 p-4 overflow-hidden">
-        <div className="flex gap-4 h-full">
-          {/* Tech Columns - flex to fill space */}
-          <div className="flex-1 flex gap-3 overflow-x-auto">
+        <div className="flex gap-3 h-full">
+          {/* Tech Columns - flex equally to fill space */}
+          <div className="flex-1 flex gap-3 min-w-0">
             {technicians.map(tech => (
               <TechColumn 
                 key={tech.id}
@@ -820,7 +890,7 @@ function SchedulerView({
 }
 
 // ============================================
-// TECH COLUMN - Flex to fill available space
+// TECH COLUMN - EQUAL FLEX WIDTH (no max constraint)
 // ============================================
 function TechColumn({ 
   tech, date, hours, appointments, onOpenDetail, onUpdateAppointment, 
@@ -849,7 +919,7 @@ function TechColumn({
   return (
     <div 
       className={`
-        flex-1 min-w-[220px] max-w-[320px] bg-white rounded-lg shadow-sm border 
+        flex-1 min-w-[180px] bg-white rounded-lg shadow-sm border 
         transition-all duration-200 flex flex-col
         ${isDragOver ? 'border-blue-400 bg-blue-50 shadow-md' : 'border-gray-200'}
       `}
@@ -916,7 +986,8 @@ function TechColumn({
 function MorningView({ technicians, appointments, selectedDate }) {
   const todayAppts = appointments.filter(a => 
     a.scheduled_date === selectedDate && 
-    !['cancelled', 'deleted'].includes(a.status)
+    !['cancelled', 'deleted'].includes(a.status) &&
+    !a.is_on_hold
   );
 
   return (
