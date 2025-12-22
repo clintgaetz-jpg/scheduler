@@ -405,16 +405,32 @@ export function BookingModal({
                       </button>
                     </div>
                   ) : selectedVehicle ? (
-                    /* Selected Vehicle Display */
+                    /* Selected Vehicle Display - matches customer card style */
                     <div className="p-3 bg-green-50 rounded-lg border border-green-300">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
+                        <div className="flex items-start gap-2">
+                          <Car size={18} className="text-green-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-semibold text-gray-900">
+                              {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                              {selectedVehicle.plate && (
+                                <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">{selectedVehicle.plate}</span>
+                              )}
+                              {selectedVehicle.engine && (
+                                <span className="text-xs text-gray-500">{selectedVehicle.engine}</span>
+                              )}
+                            </div>
+                            {selectedVehicle.vin && (
+                              <div className="text-xs text-gray-400 font-mono mt-1">{selectedVehicle.vin}</div>
+                            )}
+                            {selectedVehicle.days_since_service && (
+                              <div className={`text-xs mt-1 ${selectedVehicle.days_since_service > 180 ? 'text-red-600' : 'text-gray-500'}`}>
+                                Last service: {selectedVehicle.days_since_service}d ago
+                              </div>
+                            )}
                           </div>
-                          {selectedVehicle.plate && (
-                            <div className="text-sm text-gray-600 font-mono">{selectedVehicle.plate}</div>
-                          )}
                         </div>
                         <button
                           onClick={() => setSelectedVehicle(null)}
