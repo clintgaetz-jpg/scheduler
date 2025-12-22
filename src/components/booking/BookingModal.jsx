@@ -54,6 +54,7 @@ export function BookingModal({
   const [customer, setCustomer] = useState(null);
   const [customerLoading, setCustomerLoading] = useState(false);
   const [newCustomer, setNewCustomer] = useState(null); // For new customer form
+  const [editingCustomer, setEditingCustomer] = useState(null); // For editing existing customer
 
   // Vehicle state
   const [vehicles, setVehicles] = useState([]);
@@ -82,6 +83,7 @@ export function BookingModal({
       setSearchResults([]);
       setCustomer(null);
       setNewCustomer(null);
+      setEditingCustomer(null);
       setVehicles([]);
       setSelectedVehicle(null);
       setVehicleHistory(null);
@@ -198,6 +200,28 @@ export function BookingModal({
 
   const handleCancelNewCustomer = () => {
     setNewCustomer(null);
+  };
+
+  const handleUpdateCustomer = () => {
+    // Copy current customer data to editable state
+    setEditingCustomer({
+      ...customer,
+      isEditing: true
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCustomer(null);
+  };
+
+  const handleSaveEdit = () => {
+    // Apply edited data back to customer (locally, not to DB)
+    setCustomer({
+      ...customer,
+      ...editingCustomer,
+      _wasEdited: true  // Flag to track edits
+    });
+    setEditingCustomer(null);
   };
 
   // ============================================
@@ -342,58 +366,10 @@ export function BookingModal({
 
     setSaving(true);
 
-    let finalCustomer = customerData;
-    
-    // Create new customer if needed
-    if (newCustomer?.isNew) {
-      try {
-        const file_as = newCustomer.company_name?.trim() 
-          ? newCustomer.company_name 
-          : `${newCustomer.last_name}, ${newCustomer.first_name}`;
-        
-        const newCustomerPayload = {
-          file_as,
-          first_name: newCustomer.first_name?.trim() || null,
-          last_name: newCustomer.last_name?.trim() || null,
-          company_name: newCustomer.company_name?.trim() || null,
-          primary_phone: newCustomer.primary_phone?.trim() || null,
-          secondary_phone: newCustomer.secondary_phone?.trim() || null,
-          email: newCustomer.email?.trim() || null,
-          street: newCustomer.street?.trim() || null,
-          city: newCustomer.city?.trim() || null,
-          state: newCustomer.state?.trim() || 'AB',
-          zip: newCustomer.zip?.trim() || null,
-          country: 'Canada',
-          notes: newCustomer.notes?.trim() || null,
-          customer_since: new Date().toISOString().split('T')[0]
-        };
-        
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/contacts`, {
-          method: 'POST',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify(newCustomerPayload)
-        });
-        
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(`Failed to create customer: ${err}`);
-        }
-        
-        const [createdCustomer] = await res.json();
-        finalCustomer = { ...newCustomerPayload, ...createdCustomer };
-        console.log('Created new customer:', finalCustomer);
-      } catch (err) {
-        console.error('Failed to create customer:', err);
-        alert('Failed to create customer: ' + err.message);
-        setSaving(false);
-        return;
-      }
-    }
+    // Build file_as for new customers
+    const file_as = newCustomer?.isNew 
+      ? (newCustomer.company_name?.trim() || `${newCustomer.last_name}, ${newCustomer.first_name}`)
+      : customerData.file_as;
 
     // Build vehicle description
     const vehicleDesc = [selectedVehicle.year, selectedVehicle.make, selectedVehicle.model]
@@ -403,39 +379,39 @@ export function BookingModal({
       // ============================================
       // CUSTOMER FIELDS - CORE
       // ============================================
-      customer_id: finalCustomer.id || null,
-      customer_name: finalCustomer.file_as || null,
-      customer_phone: finalCustomer.primary_phone || null,
-      customer_phone_secondary: finalCustomer.secondary_phone || null,
-      customer_email: finalCustomer.email || null,
-      company_name: finalCustomer.company_name || null,
-      protractor_contact_id: finalCustomer.protractor_contact_id || null,
+      customer_id: customerData.id || null,  // null for new customers
+      customer_name: file_as || null,
+      customer_phone: customerData.primary_phone || null,
+      customer_phone_secondary: customerData.secondary_phone || null,
+      customer_email: customerData.email || null,
+      company_name: customerData.company_name || null,
+      protractor_contact_id: customerData.protractor_contact_id || null,
       
       // ============================================
       // CUSTOMER FIELDS - EXTENDED
       // ============================================
-      customer_first_name: finalCustomer.first_name || null,
-      customer_last_name: finalCustomer.last_name || null,
-      customer_street: finalCustomer.street || null,
-      customer_city: finalCustomer.city || null,
-      customer_state: finalCustomer.state || null,
-      customer_zip: finalCustomer.zip || null,
-      customer_country: finalCustomer.country || null,
+      customer_first_name: customerData.first_name || null,
+      customer_last_name: customerData.last_name || null,
+      customer_street: customerData.street || null,
+      customer_city: customerData.city || null,
+      customer_state: customerData.state || null,
+      customer_zip: customerData.zip || null,
+      customer_country: customerData.country || 'Canada',
       
       // Full address as single field too
-      customer_address: [finalCustomer.street, finalCustomer.city, finalCustomer.state, finalCustomer.zip]
+      customer_address: [customerData.street, customerData.city, customerData.state, customerData.zip]
         .filter(Boolean).join(', ') || null,
       
       // ============================================
-      // CUSTOMER STATS
+      // CUSTOMER STATS (null for new customers)
       // ============================================
-      customer_since: finalCustomer.customer_since || null,
-      customer_lifetime_visits: finalCustomer.lifetime_visits || null,
-      customer_lifetime_spent: finalCustomer.lifetime_spent || null,
-      customer_avg_visit_value: finalCustomer.avg_visit_value || null,
-      customer_last_visit_date: finalCustomer.last_visit_date || null,
-      customer_days_since_visit: finalCustomer.days_since_visit || null,
-      customer_is_supplier: finalCustomer.is_supplier || false,
+      customer_since: customerData.customer_since || null,
+      customer_lifetime_visits: customerData.lifetime_visits || null,
+      customer_lifetime_spent: customerData.lifetime_spent || null,
+      customer_avg_visit_value: customerData.avg_visit_value || null,
+      customer_last_visit_date: customerData.last_visit_date || null,
+      customer_days_since_visit: customerData.days_since_visit || null,
+      customer_is_supplier: customerData.is_supplier || false,
       
       // ============================================
       // VEHICLE FIELDS - CORE
@@ -463,6 +439,7 @@ export function BookingModal({
       // ============================================
       is_new_customer: newCustomer?.isNew || false,
       is_new_vehicle: selectedVehicle.isNew || false,
+      is_customer_updated: customerData._wasEdited || false,
       
       // ============================================
       // SCHEDULING
@@ -549,6 +526,8 @@ export function BookingModal({
             customer={customer}
             newCustomer={newCustomer}
             onNewCustomerChange={setNewCustomer}
+            editingCustomer={editingCustomer}
+            onEditingCustomerChange={setEditingCustomer}
             searchTerm={searchTerm}
             searchResults={searchResults}
             searching={searching}
@@ -556,11 +535,9 @@ export function BookingModal({
             onSearch={handleSearch}
             onSelectCustomer={handleSelectCustomer}
             onClearCustomer={handleClearCustomer}
-            onUpdateCustomer={() => {
-              // TODO: Open customer edit modal/form
-              console.log('Update customer:', customer?.id);
-              alert('Update customer feature - coming soon');
-            }}
+            onUpdateCustomer={handleUpdateCustomer}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
             onAddNewCustomer={handleAddNewCustomer}
             onCancelNewCustomer={handleCancelNewCustomer}
           />
@@ -616,6 +593,8 @@ function Panel1Customer({
   customer,
   newCustomer,
   onNewCustomerChange,
+  editingCustomer,
+  onEditingCustomerChange,
   searchTerm,
   searchResults,
   searching,
@@ -624,6 +603,8 @@ function Panel1Customer({
   onSelectCustomer,
   onClearCustomer,
   onUpdateCustomer,
+  onSaveEdit,
+  onCancelEdit,
   onAddNewCustomer,
   onCancelNewCustomer
 }) {
@@ -634,6 +615,135 @@ function Panel1Customer({
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
           <p>Loading customer...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Editing Customer Form
+  if (editingCustomer?.isEditing) {
+    return (
+      <div className="border-r border-gray-200 flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-gray-200 bg-amber-50 flex-shrink-0 overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-amber-700">Update Customer Info</span>
+            <div className="flex gap-2">
+              <button
+                onClick={onCancelEdit}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSaveEdit}
+                className="px-2 py-0.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+          
+          {/* Name Row */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="First Name"
+              value={editingCustomer.first_name || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, first_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Last Name"
+              value={editingCustomer.last_name || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, last_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Company */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Company"
+              value={editingCustomer.company_name || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, company_name: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Phones */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="tel"
+              placeholder="Phone"
+              value={editingCustomer.primary_phone || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, primary_phone: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="tel"
+              placeholder="Alt Phone"
+              value={editingCustomer.secondary_phone || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, secondary_phone: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Email */}
+          <div className="mb-2">
+            <input
+              type="email"
+              placeholder="Email"
+              value={editingCustomer.email || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, email: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Address */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Street Address"
+              value={editingCustomer.street || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, street: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* City, Province, Postal */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="City"
+              value={editingCustomer.city || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, city: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Prov"
+              value={editingCustomer.state || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, state: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Postal"
+              value={editingCustomer.zip || ''}
+              onChange={(e) => onEditingCustomerChange({ ...editingCustomer, zip: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+        
+        {/* Info hint */}
+        <div className="p-3 text-xs text-gray-500">
+          <p className="text-amber-600">Changes saved to this appointment only.</p>
+          <p className="mt-1">Update master record in Protractor.</p>
+        </div>
+        
+        <div className="flex-1 bg-gray-50" />
       </div>
     );
   }
@@ -840,8 +950,13 @@ function Panel1Customer({
       <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-bold text-gray-900 text-lg">{customer.file_as}</h3>
+              {customer._wasEdited && (
+                <span className="px-1.5 py-0.5 text-xs bg-amber-200 text-amber-800 rounded">
+                  Edited
+                </span>
+              )}
               <button
                 onClick={onUpdateCustomer}
                 className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded hover:bg-amber-200 flex items-center gap-1"
