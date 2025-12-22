@@ -878,10 +878,10 @@ function Panel2Vehicles({
           </span>
           <button
             onClick={onAddNewVehicle}
-            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
-            title="Add new vehicle"
+            className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded-full hover:bg-blue-700 flex items-center gap-1"
           >
-            <Plus size={16} />
+            <Plus size={12} />
+            New Vehicle
           </button>
         </div>
       </div>
