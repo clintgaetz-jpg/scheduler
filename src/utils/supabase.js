@@ -264,6 +264,11 @@ export async function getAppointments(filters = {}) {
 
 // Book appointment using the database function
 export async function bookAppointment(data) {
+  return bookAppointmentDirect(data);
+}
+
+// Old RPC version (keeping for reference)
+export async function bookAppointmentRpc(data) {
   return supabaseRpc('book_appointment', {
     // Customer fields (required)
     p_customer_id: data.customer_id || null,
@@ -542,15 +547,3 @@ export async function bookAppointmentDirect(data) {
     error: result
   };
 }
-
-// REPLACE the existing bookAppointment function with this:
-export async function bookAppointment(data) {
-  // Use direct insert to support all new fields
-  return bookAppointmentDirect(data);
-}
-
-
-
-
-
-
