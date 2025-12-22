@@ -779,10 +779,7 @@ function CallCard({ call, isExpanded, isHidden, isSelected, onToggleExpand, onTo
   );
 }
 
-// Helper for CallCard
-const getCallTimestamp = (call) => {
-  return call.call_created_at || call.created_at || call.last_event_at;
-};
+
 
 // ============================================
 // THREAD ITEM COMPONENT
