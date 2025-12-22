@@ -265,25 +265,50 @@ export async function getAppointments(filters = {}) {
 // Book appointment using the database function
 export async function bookAppointment(data) {
   return supabaseRpc('book_appointment', {
+    // Customer fields (required)
     p_customer_id: data.customer_id || null,
     p_customer_name: data.customer_name,
     p_customer_phone: data.customer_phone || null,
+    
+    // Customer fields (optional)
+    p_customer_phone_secondary: data.customer_phone_secondary || null,
+    p_customer_email: data.customer_email || null,
+    p_customer_address: data.customer_address || null,
+    p_company_name: data.company_name || null,
+    p_protractor_contact_id: data.protractor_contact_id || null,
+    
+    // Vehicle fields
     p_vehicle_id: data.vehicle_id || null,
     p_vehicle_description: data.vehicle_description || null,
     p_vehicle_vin: data.vehicle_vin || null,
-    p_scheduled_date: data.scheduled_date,
+    p_vehicle_plate: data.vehicle_plate || null,
+    p_vehicle_mileage: data.vehicle_mileage || null,
+    p_unit_number: data.unit_number || null,
+    
+    // Change tracking
+    p_is_new_customer: data.is_new_customer || false,
+    p_is_new_vehicle: data.is_new_vehicle || false,
+    p_protractor_updates: data.protractor_updates || {},
+    
+    // Scheduling
+    p_scheduled_date: data.scheduled_date || null,
     p_time_slot: data.time_slot || 'anytime',
     p_tech_id: data.tech_id || null,
     p_estimated_hours: data.estimated_hours || 1,
+    
+    // Services
     p_service_category: data.service_category || 'general',
     p_services: data.services || [],
     p_estimated_total: data.estimated_total || 0,
+    
+    // Notes
     p_notes: data.notes || null,
     p_customer_request: data.customer_request || null,
+    
+    // Meta
     p_source: data.source || 'manual',
     p_created_by: data.created_by || null,
-    p_booking_group_id: data.booking_group_id || null,
-    p_protractor_contact_id: data.protractor_contact_id || null
+    p_booking_group_id: data.booking_group_id || null
   });
 }
 
