@@ -197,6 +197,10 @@ export function CustomerPanel({
 // INFO TAB
 // ============================================
 function InfoTab({ customer, vehicles, selectedVehicle, onSelectVehicle, onAddNewVehicle, newVehicleData, onNewVehicleChange, onViewHistory }) {
+  const [expandedVehicle, setExpandedVehicle] = useState(null);
+  const [sortOrder, setSortOrder] = useState('overdue'); // 'overdue' | 'recent' | 'alpha'
+  const [showInactive, setShowInactive] = useState(false);
+  
   // Handle different possible field names from contacts table
   const customerSince = customer?.customer_since || customer?.created_at;
   const lifetimeVisits = customer?.lifetime_visits || customer?.total_visits;
@@ -205,19 +209,45 @@ function InfoTab({ customer, vehicles, selectedVehicle, onSelectVehicle, onAddNe
   const lastVisitDate = customer?.last_visit_date || customer?.last_service_date;
   const daysSinceVisitVal = lastVisitDate ? daysSince(lastVisitDate) : customer?.days_since_visit;
 
-  // Sort vehicles: overdue first, then by days since visit (longest first)
-  const sortedVehicles = [...vehicles].sort((a, b) => {
-    const aDays = (a.last_seen_at || a.history?.[0]?.invoice_date) ? daysSince(a.last_seen_at || a.history?.[0]?.invoice_date) : 9999;
-    const bDays = (b.last_seen_at || b.history?.[0]?.invoice_date) ? daysSince(b.last_seen_at || b.history?.[0]?.invoice_date) : 9999;
-    const aOverdue = aDays > 180;
-    const bOverdue = bDays > 180;
-    if (aOverdue && !bOverdue) return -1;
-    if (!aOverdue && bOverdue) return 1;
-    return bDays - aDays;
-  });
+  // Filter and sort vehicles
+  const processedVehicles = useMemo(() => {
+    let filtered = [...vehicles];
+    
+    // Filter out vehicles not seen in 3 years (1095 days) unless showing inactive
+    if (!showInactive) {
+      filtered = filtered.filter(v => {
+        const lastVisit = v.last_service_date || v.last_seen_at || v.history?.[0]?.invoice_date;
+        const days = lastVisit ? daysSince(lastVisit) : 9999;
+        return days < 1095; // 3 years
+      });
+    }
+    
+    // Sort based on selected order
+    filtered.sort((a, b) => {
+      const aDays = (a.days_since_service ?? (a.last_seen_at || a.history?.[0]?.invoice_date ? daysSince(a.last_seen_at || a.history?.[0]?.invoice_date) : 9999));
+      const bDays = (b.days_since_service ?? (b.last_seen_at || b.history?.[0]?.invoice_date ? daysSince(b.last_seen_at || b.history?.[0]?.invoice_date) : 9999));
+      
+      if (sortOrder === 'overdue') {
+        // Most overdue first
+        return bDays - aDays;
+      } else if (sortOrder === 'recent') {
+        // Most recent first
+        return aDays - bDays;
+      } else {
+        // Alphabetical by make/model
+        const aName = `${a.make} ${a.model}`.toLowerCase();
+        const bName = `${b.make} ${b.model}`.toLowerCase();
+        return aName.localeCompare(bName);
+      }
+    });
+    
+    return filtered;
+  }, [vehicles, sortOrder, showInactive]);
+
+  const inactiveCount = vehicles.length - processedVehicles.length;
   
-  const overdueCount = sortedVehicles.filter(v => {
-    const days = (v.last_seen_at || v.history?.[0]?.invoice_date) ? daysSince(v.last_seen_at || v.history?.[0]?.invoice_date) : null;
+  const overdueCount = processedVehicles.filter(v => {
+    const days = v.days_since_service ?? (v.last_seen_at || v.history?.[0]?.invoice_date ? daysSince(v.last_seen_at || v.history?.[0]?.invoice_date) : null);
     return days && days > 180;
   }).length;
   
@@ -299,16 +329,39 @@ function InfoTab({ customer, vehicles, selectedVehicle, onSelectVehicle, onAddNe
         </div>
       )}
 
-      {/* Vehicle List - Clickable to select */}
+      {/* Vehicle List - Clickable to select, expandable for history */}
       <div className={`border rounded-lg overflow-hidden ${overdueCount > 0 ? 'border-red-200' : 'border-gray-200'}`}>
+        {/* Header with controls */}
         <div className={`px-3 py-2 border-b flex items-center justify-between ${overdueCount > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-          <span className="text-sm font-medium text-gray-700">Select Vehicle ({vehicles.length})</span>
           <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Select Vehicle ({processedVehicles.length})</span>
             {overdueCount > 0 && (
               <span className="text-xs font-medium text-white bg-red-500 px-2 py-0.5 rounded-full">
                 {overdueCount} due
               </span>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Sort dropdown */}
+            <select 
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white"
+            >
+              <option value="overdue">Most Overdue</option>
+              <option value="recent">Most Recent</option>
+              <option value="alpha">A-Z</option>
+            </select>
+            {/* Show inactive toggle */}
+            {inactiveCount > 0 && (
+              <button
+                onClick={() => setShowInactive(!showInactive)}
+                className={`text-xs px-2 py-0.5 rounded ${showInactive ? 'bg-gray-200 text-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}
+              >
+                +{inactiveCount} old
+              </button>
+            )}
+            {/* Add new button */}
             <button
               onClick={() => onAddNewVehicle({ isNew: true, year: '', make: '', model: '', vin: '', plate: '' })}
               className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -317,72 +370,123 @@ function InfoTab({ customer, vehicles, selectedVehicle, onSelectVehicle, onAddNe
             </button>
           </div>
         </div>
-        <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-          {sortedVehicles.map((v, i) => {
-            const lastVisit = v.last_seen_at || v.history?.[0]?.invoice_date;
-            const days = lastVisit ? daysSince(lastVisit) : null;
+        
+        {/* Vehicle rows */}
+        <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+          {processedVehicles.map((v, i) => {
+            const lastVisit = v.last_service_date || v.last_seen_at || v.history?.[0]?.invoice_date;
+            const days = v.days_since_service ?? (lastVisit ? daysSince(lastVisit) : null);
             const isOverdue = days && days > 180;
             const isWarning = days && days > 120 && days <= 180;
             const isSelected = selectedVehicle?.vin === v.vin && !selectedVehicle?.isNew;
+            const isExpanded = expandedVehicle === v.vin;
+            const last3 = v.last_3_invoices || v.history?.slice(0, 3) || [];
             
             return (
-              <button
-                key={i}
-                onClick={() => onSelectVehicle(isSelected ? null : v)}
-                className={`w-full px-3 py-2.5 flex items-center justify-between text-left transition-colors ${
-                  isSelected ? 'bg-blue-100 hover:bg-blue-100' :
-                  isOverdue ? 'bg-red-50 hover:bg-red-100' : 
-                  isWarning ? 'bg-amber-50 hover:bg-amber-100' : 
-                  'hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  {isSelected ? (
-                    <Check size={16} className="text-blue-600 flex-shrink-0" />
-                  ) : (
-                    <Car size={16} className={`flex-shrink-0 ${isOverdue ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-gray-400'}`} />
-                  )}
-                  <span className={`text-sm truncate ${isSelected ? 'font-semibold text-blue-900' : 'text-gray-900'}`}>
-                    {v.year} {v.make} {v.model}
-                  </span>
-                  {isOverdue && (
-                    <span className="flex-shrink-0 text-xs text-white bg-red-500 px-1.5 py-0.5 rounded font-medium">DUE</span>
-                  )}
-                  {isWarning && !isOverdue && (
-                    <span className="flex-shrink-0 text-xs text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded font-medium">SOON</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {v.plate && <span className="text-xs text-gray-500 font-mono">{v.plate}</span>}
-                  {days !== null && (
-                    <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : isWarning ? 'text-amber-600' : 'text-gray-400'}`}>
-                      {days}d
-                    </span>
-                  )}
+              <div key={i} className={`${
+                isSelected ? 'bg-blue-50' :
+                isOverdue ? 'bg-red-50/50' : 
+                isWarning ? 'bg-amber-50/50' : ''
+              }`}>
+                {/* Main row */}
+                <div className="flex items-center">
+                  {/* Expand/collapse button */}
+                  <button
+                    onClick={() => setExpandedVehicle(isExpanded ? null : v.vin)}
+                    className="px-2 py-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {last3.length > 0 ? (
+                      isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />
+                    ) : (
+                      <span className="w-4" />
+                    )}
+                  </button>
+                  
+                  {/* Clickable vehicle info */}
+                  <button
+                    onClick={() => onSelectVehicle(isSelected ? null : v)}
+                    className="flex-1 px-2 py-2.5 flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {isSelected ? (
+                        <Check size={16} className="text-blue-600 flex-shrink-0" />
+                      ) : (
+                        <Car size={16} className={`flex-shrink-0 ${isOverdue ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-gray-400'}`} />
+                      )}
+                      <span className={`text-sm truncate ${isSelected ? 'font-semibold text-blue-900' : 'text-gray-900'}`}>
+                        {v.year} {v.make} {v.model}
+                      </span>
+                      {isOverdue && (
+                        <span className="flex-shrink-0 text-xs text-white bg-red-500 px-1.5 py-0.5 rounded font-medium">DUE</span>
+                      )}
+                      {isWarning && !isOverdue && (
+                        <span className="flex-shrink-0 text-xs text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded font-medium">SOON</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {v.plate && <span className="text-xs text-gray-500 font-mono">{v.plate}</span>}
+                      {days !== null && (
+                        <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : isWarning ? 'text-amber-600' : 'text-gray-400'}`}>
+                          {days}d
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  
                   {/* History button */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onViewHistory(v);
-                    }}
-                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                    title="View history"
+                    onClick={() => onViewHistory(v)}
+                    className="px-2 py-3 text-gray-400 hover:text-blue-600"
+                    title="View full history"
                   >
                     <ClipboardList size={14} />
                   </button>
                 </div>
-              </button>
+                
+                {/* Expanded history */}
+                {isExpanded && last3.length > 0 && (
+                  <div className="pl-10 pr-3 pb-2 space-y-1">
+                    {last3.map((wo, wi) => (
+                      <div key={wi} className="text-xs flex items-center justify-between py-1 px-2 bg-white rounded border border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">#{wo.workorder_number}</span>
+                          <span className="text-gray-400">{formatDate(wo.invoice_date)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{formatMoney(wo.grand_total)}</span>
+                          {(wo.deferred?.length > 0 || wo.deferred_packages?.length > 0) && (
+                            <span className="text-amber-600 text-xs">
+                              ⚠️ {(wo.deferred || wo.deferred_packages).filter(d => !d.is_header).length} deferred
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
-          {vehicles.length === 0 && (
+          
+          {processedVehicles.length === 0 && (
             <div className="px-3 py-6 text-center">
               <Car size={24} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-sm text-gray-400">No vehicles on file</p>
+              <p className="text-sm text-gray-400">
+                {vehicles.length === 0 ? 'No vehicles on file' : 'No active vehicles (all >3 years)'}
+              </p>
+              {inactiveCount > 0 && !showInactive && (
+                <button
+                  onClick={() => setShowInactive(true)}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                >
+                  Show {inactiveCount} inactive vehicles
+                </button>
+              )}
               <button
                 onClick={() => onAddNewVehicle({ isNew: true, year: '', make: '', model: '', vin: '', plate: '' })}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium block mx-auto"
               >
-                + Add First Vehicle
+                + Add New Vehicle
               </button>
             </div>
           )}
