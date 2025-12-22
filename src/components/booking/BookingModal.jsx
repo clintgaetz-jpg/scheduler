@@ -974,8 +974,8 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
               {vehicle.last_mileage.toLocaleString()} km
             </span>
           )}
-          {vehicle.estimated_current_mileage && vehicle.estimated_current_mileage !== vehicle.last_mileage && (
-            <span className="text-gray-400"> → ~{vehicle.estimated_current_mileage.toLocaleString()}</span>
+          {vehicle.estimated_current_mileage && vehicle.estimated_current_mileage > vehicle.last_mileage && (
+            <span className="text-blue-500"> → ~{vehicle.estimated_current_mileage.toLocaleString()}</span>
           )}
           {vehicle.days_since_service != null && (
             <span className="ml-2">
@@ -1008,6 +1008,7 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
                     )}
                     {!hasContent && <span className="w-2.5" />}
                     <span className="text-gray-500">{inv.invoice_date?.split('T')[0]}</span>
+                    {inv.mileage && <span className="text-gray-400">{inv.mileage.toLocaleString()}km</span>}
                     <span className="font-medium">WO# {inv.workorder_number}</span>
                     <span className="ml-auto font-medium">${inv.grand_total?.toFixed(0)}</span>
                     {deferred.length > 0 && <span className="text-amber-500 ml-1">⚠️</span>}
