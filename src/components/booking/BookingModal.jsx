@@ -972,10 +972,10 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
           {vehicle.last_mileage && (
             <span>
               {vehicle.last_mileage.toLocaleString()} km
-              {vehicle.estimated_current_mileage && (
-                <span className="text-gray-400"> → ~{vehicle.estimated_current_mileage.toLocaleString()}</span>
-              )}
             </span>
+          )}
+          {vehicle.estimated_current_mileage && vehicle.estimated_current_mileage !== vehicle.last_mileage && (
+            <span className="text-gray-400"> → ~{vehicle.estimated_current_mileage.toLocaleString()}</span>
           )}
           {vehicle.days_since_service != null && (
             <span className="ml-2">
@@ -984,44 +984,46 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
           )}
         </div>
 
-        {/* Last 3 Invoices - EXPANDABLE */}
+        {/* Last 3 Invoices - EXPANDABLE with completed + deferred */}
         {vehicle.last_3_invoices?.length > 0 && (
           <div className="mt-2 border-t border-gray-100 pt-1 space-y-0.5">
             {vehicle.last_3_invoices.slice(0, 3).map((inv, i) => {
               const isExpanded = expandedWO === inv.workorder_number;
-              const hasDeferred = inv.deferred?.length > 0;
               const completed = inv.completed_packages || [];
-              const deferred = inv.deferred || inv.deferred_packages || [];
+              const deferred = (inv.deferred_packages || []).filter(d => !d.is_header);
+              const hasContent = completed.length > 0 || deferred.length > 0;
               
               return (
                 <div key={i}>
                   {/* Invoice Header - Clickable */}
                   <div 
-                    onClick={(e) => toggleExpand(inv.workorder_number, e)}
-                    className="flex items-center gap-1 text-xs py-0.5 px-1 bg-gray-50 rounded cursor-pointer hover:bg-gray-100"
+                    onClick={hasContent ? (e) => toggleExpand(inv.workorder_number, e) : undefined}
+                    className={`flex items-center gap-1 text-xs py-0.5 px-1 bg-gray-50 rounded ${hasContent ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                   >
-                    <ChevronRight 
-                      size={10} 
-                      className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} 
-                    />
-                    <span className="text-gray-500">{inv.invoice_date}</span>
+                    {hasContent && (
+                      <ChevronRight 
+                        size={10} 
+                        className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    )}
+                    {!hasContent && <span className="w-2.5" />}
+                    <span className="text-gray-500">{inv.invoice_date?.split('T')[0]}</span>
                     <span className="font-medium">WO# {inv.workorder_number}</span>
                     <span className="ml-auto font-medium">${inv.grand_total?.toFixed(0)}</span>
-                    {hasDeferred && <span className="text-amber-500 ml-1">⚠️</span>}
+                    {deferred.length > 0 && <span className="text-amber-500 ml-1">⚠️</span>}
                   </div>
                   
-                  {/* Expanded Content */}
-                  {isExpanded && (
+                  {/* Expanded Content - Completed first, then Deferred */}
+                  {isExpanded && hasContent && (
                     <div className="ml-3 pl-2 border-l border-gray-200 mt-1 mb-1 space-y-0.5">
-                      {completed.slice(0, 5).map((pkg, j) => (
-                        <div key={j} className="text-xs text-gray-600 truncate">
+                      {/* Completed packages */}
+                      {completed.map((pkg, j) => (
+                        <div key={`c${j}`} className="text-xs text-gray-600 truncate">
                           ✓ {pkg.title}
                         </div>
                       ))}
-                      {completed.length > 5 && (
-                        <div className="text-xs text-gray-400">+{completed.length - 5} more</div>
-                      )}
-                      {deferred.filter(d => !d.is_header).map((pkg, j) => (
+                      {/* Deferred packages */}
+                      {deferred.map((pkg, j) => (
                         <div key={`d${j}`} className="text-xs text-amber-600 truncate">
                           ⚠️ {pkg.title} - ${pkg.total?.toFixed(0)}
                         </div>
@@ -1102,13 +1104,28 @@ function Panel3HistoryServices({
       const term = historySearch.toLowerCase().trim();
       return invoices.filter(inv => {
         try {
-          if (inv.workorder_number && inv.workorder_number.toLowerCase().includes(term)) return true;
+          // Search WO number (could be string or number)
+          const woNum = String(inv.workorder_number || '').toLowerCase();
+          if (woNum.includes(term)) return true;
+          
+          // Search invoice date
+          const invDate = String(inv.invoice_date || '').toLowerCase();
+          if (invDate.includes(term)) return true;
+          
+          // Search completed packages
           if (inv.completed_packages && Array.isArray(inv.completed_packages)) {
-            if (inv.completed_packages.some(p => p.title && p.title.toLowerCase().includes(term))) return true;
+            for (const p of inv.completed_packages) {
+              if (p.title && String(p.title).toLowerCase().includes(term)) return true;
+            }
           }
+          
+          // Search deferred packages
           if (inv.deferred_packages && Array.isArray(inv.deferred_packages)) {
-            if (inv.deferred_packages.some(p => p.title && p.title.toLowerCase().includes(term))) return true;
+            for (const p of inv.deferred_packages) {
+              if (p.title && String(p.title).toLowerCase().includes(term)) return true;
+            }
           }
+          
           return false;
         } catch (e) {
           return false;
@@ -1117,6 +1134,7 @@ function Panel3HistoryServices({
     } catch (e) {
       console.error('History filter error:', e);
       return [];
+    }
     }
   }, [vehicleHistory, historySearch]);
 
