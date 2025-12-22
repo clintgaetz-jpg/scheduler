@@ -132,10 +132,67 @@ export default function CallDashboard() {
     try {
       const startUTC = getAlbertaDayStartAsUTC(daysBack);
       const [callsData, messagesData] = await Promise.all([
-        supabase.fetch('v_live_calls_enriched', { select: '*', order: 'created_at.desc', filters: { 'created_at': `gte.${startUTC}` } }),
+        // Query Live_Call directly to get last_payload for outbound number extraction
+        supabase.fetch('Live_Call', { 
+          select: 'conversation_space_id,direction,status,external_number,caller_name,call_created_at,call_ended_at,answered_at,caller_outcome,last_event_at,created_at,updated_at,last_payload,dialed_number,business_number',
+          order: 'created_at.desc', 
+          filters: { 'created_at': `gte.${startUTC}` } 
+        }),
         supabase.fetch('messages', { select: '*', order: 'created_at.desc', filters: { 'created_at': `gte.${startUTC}` } })
       ]);
-      setCalls(callsData || []);
+      
+      // Enrich calls with extracted data
+      const enrichedCalls = (callsData || []).map(call => {
+        const payload = call.last_payload?.content || {};
+        const isInbound = call.direction?.toUpperCase() === 'INBOUND';
+        
+        // Extract AI analysis
+        const ai = payload.aiAnalysis || {};
+        
+        // For outbound: find who was called from participants
+        let dialedNumber = call.dialed_number;
+        if (!isInbound && !dialedNumber && payload.participants?.[0]?.number) {
+          dialedNumber = payload.participants[0].number;
+        }
+        
+        // Check if missed
+        const isMissed = isInbound && (call.caller_outcome === 'VOICEMAIL' || call.caller_outcome === 'MISSED' || call.caller_outcome === 'ABANDONED');
+        
+        // Get staff name from caller for outbound, or from participants for inbound answered
+        let staffName = null;
+        if (!isInbound) {
+          staffName = payload.caller?.name || call.caller_name;
+        } else if (payload.participants) {
+          const lineParticipant = payload.participants.find(p => p.type?.value === 'LINE');
+          if (lineParticipant) staffName = lineParticipant.name;
+        }
+        
+        // Get business line
+        let businessLine = null;
+        if (payload.participants?.[0]?.type?.name) {
+          businessLine = payload.participants[0].type.name;
+        }
+        
+        // Work order info - would need to join with open_workorders, skip for now
+        
+        return {
+          ...call,
+          dialed_number: dialedNumber,
+          is_missed: isMissed,
+          missed_reason: call.caller_outcome === 'VOICEMAIL' ? 'voicemail' : (isMissed ? 'abandoned' : null),
+          staff_name: staffName,
+          business_line_name: businessLine || call.business_number,
+          ai_summary: ai.summary,
+          ai_sentiment: ai.sentiment,
+          ai_topics: ai.topics,
+          has_recording: !!payload.caller?.recording?.id,
+          display_name: call.caller_name || formatPhone(call.external_number),
+          matched_customer_name: null, // Would need to join with customer_phones_v3
+          has_open_workorder: false, // Would need to join
+        };
+      });
+      
+      setCalls(enrichedCalls);
       setMessages(messagesData || []);
     } catch (err) { console.error('Failed to load:', err); }
     setLoading(false);
@@ -331,10 +388,24 @@ function CallRow({ call, isSelected, isHidden, onSelect, onToggleHide }) {
   const durationSec = call.call_ended_at && call.call_created_at ? Math.round((new Date(call.call_ended_at) - new Date(call.call_created_at)) / 1000) : null;
   const business = getBusiness(call.business_line_name);
   
-  // Who is this call with? For inbound: who called. For outbound: who we called.
-  // display_name is COALESCE(matched_customer_name, caller_name, external_number)
-  const contactName = call.display_name || formatPhone(call.external_number);
+  // Who is this call with?
+  let contactDisplay = '';
+  let staffDisplay = '';
   const isCustomer = !!call.matched_customer_name;
+  
+  if (isInbound) {
+    // Inbound: show who called us
+    contactDisplay = call.matched_customer_name || call.caller_name || formatPhone(call.external_number);
+    staffDisplay = call.staff_name; // who answered
+  } else {
+    // Outbound: show who made the call -> who they called
+    staffDisplay = call.staff_name || call.caller_name || 'Staff';
+    if (call.dialed_number) {
+      contactDisplay = formatPhone(call.dialed_number);
+    } else {
+      contactDisplay = 'Unknown';
+    }
+  }
   
   // Summary - show if useful
   const summary = call.ai_summary && !call.ai_summary.includes('Not enough information') ? call.ai_summary : null;
@@ -369,12 +440,20 @@ function CallRow({ call, isSelected, isHidden, onSelect, onToggleHide }) {
         
         {/* Contact */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-medium truncate ${isCustomer ? 'text-green-700' : 'text-gray-800'}`}>
-              {isInbound ? contactName : `→ ${contactName}`}
-            </span>
-            {call.matched_customer_name && call.display_name !== formatPhone(call.external_number) && (
-              <span className="text-xs text-gray-400">{formatPhone(call.external_number)}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isInbound ? (
+              <>
+                <span className={`text-sm font-medium truncate ${isCustomer ? 'text-green-700' : 'text-gray-800'}`}>
+                  {contactDisplay}
+                </span>
+                {staffDisplay && <span className="text-xs text-gray-500">→ {staffDisplay}</span>}
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-blue-600 font-medium">{staffDisplay}</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-sm font-medium text-gray-800">{contactDisplay}</span>
+              </>
             )}
           </div>
           {call.business_line_name && (
