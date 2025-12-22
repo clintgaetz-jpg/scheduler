@@ -103,43 +103,19 @@ export function QuoteBuilder({
       </div>
 
       {/* ============================================
-          SECTION 3: Totals (fixed at bottom)
+          SECTION 3: Totals (compact)
           ============================================ */}
-      <div className="flex-shrink-0 border-t border-gray-300 pt-4 mt-4">
-        {/* Line items */}
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Subtotal</span>
-            <span>{formatMoney(totals.subtotal)}</span>
-          </div>
-          
-          <div className="flex justify-between text-gray-500">
-            <span>Shop Supplies (est.)</span>
-            <span>{formatMoney(totals.shopSupplies)}</span>
-          </div>
-          
-          <div className="flex justify-between text-gray-500">
-            <span>GST (est.)</span>
-            <span>{formatMoney(totals.tax)}</span>
-          </div>
-          
-          {totals.bufferEnabled && (
-            <div className="flex justify-between text-orange-600">
-              <span>Buffer ({totals.bufferPercent}%)</span>
-              <span>{formatMoney(totals.buffer)}</span>
-            </div>
-          )}
+      <div className="flex-shrink-0 border-t border-gray-200 pt-2 mt-2">
+        {/* Compact totals row */}
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>{totals.hours.toFixed(1)}h</span>
+          <span>+supplies +GST {totals.bufferEnabled && `+${totals.bufferPercent}%`}</span>
         </div>
         
         {/* Grand total */}
-        <div className="flex justify-between font-bold text-lg mt-3 pt-3 border-t border-gray-200">
+        <div className="flex justify-between font-bold text-base mt-1">
           <span>Estimate</span>
           <span className="text-green-600">{formatMoney(totals.total)}</span>
-        </div>
-        
-        {/* Hours */}
-        <div className="text-xs text-gray-500 text-right mt-1">
-          {totals.hours.toFixed(1)} hours
         </div>
       </div>
     </div>
