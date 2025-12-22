@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, X, User, Phone, Mail, MapPin, Building2, Car,
   ChevronDown, ChevronRight, Clock, AlertTriangle, Plus,
   MessageSquare, Calendar, Trash2, Package, Wrench,
-  FileText, DollarSign, History, Check
+  FileText, DollarSign, History, Check, Edit, Star,
+  Smartphone, CreditCard
 } from 'lucide-react';
 
 // ============================================
@@ -16,9 +17,28 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SHOP_SUPPLIES_RATE = 0.05;
 const GST_RATE = 0.05;
 const BUFFER_RATE = 0.05;
+const LABOR_RATE = 160;
 
 // ============================================
-// MAIN BOOKING MODAL - 4 PANEL LAYOUT
+// HELPER: Format VIN with emphasis
+// ============================================
+function formatVIN(vin) {
+  if (!vin || vin.length !== 17) return vin || '—';
+  // Positions: 8th (index 7), 10th (index 9), last 8 (index 9-16)
+  return (
+    <span className="font-mono text-xs">
+      {vin.slice(0, 7)}
+      <span className="font-bold text-sm">{vin[7]}</span>
+      {vin[8]}
+      <span className="font-bold text-sm">{vin[9]}</span>
+      {vin.slice(10, 11)}
+      <span className="font-bold text-sm">{vin.slice(11)}</span>
+    </span>
+  );
+}
+
+// ============================================
+// MAIN BOOKING MODAL - 4 PANEL LAYOUT v2
 // ============================================
 
 export function BookingModal({
@@ -35,12 +55,14 @@ export function BookingModal({
   const [searching, setSearching] = useState(false);
   const [customer, setCustomer] = useState(null);
   const [customerLoading, setCustomerLoading] = useState(false);
+  const [contactUpdateFlags, setContactUpdateFlags] = useState({});
 
   // Vehicle state
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [vehicleHistory, setVehicleHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
 
   // Quote state
   const [quoteItems, setQuoteItems] = useState([]);
@@ -65,6 +87,8 @@ export function BookingModal({
       setSelectedVehicle(null);
       setVehicleHistory(null);
       setQuoteItems([]);
+      setContactUpdateFlags({});
+      setVehicleSearchTerm('');
       setFormData({
         scheduled_date: selectedDate || new Date().toISOString().split('T')[0],
         tech_id: '',
@@ -131,12 +155,10 @@ export function BookingModal({
       if (data && data.customer) {
         setCustomer(data.customer);
         setVehicles(data.vehicles || []);
-        // Auto-select first vehicle if only one
         if (data.vehicles?.length === 1) {
           handleSelectVehicle(data.vehicles[0]);
         }
       } else {
-        // Fallback to basic customer data
         setCustomer(result);
         setVehicles([]);
       }
@@ -154,6 +176,7 @@ export function BookingModal({
     setSelectedVehicle(null);
     setVehicleHistory(null);
     setQuoteItems([]);
+    setContactUpdateFlags({});
   };
 
   // ============================================
@@ -161,7 +184,6 @@ export function BookingModal({
   // ============================================
 
   const handleSelectVehicle = async (vehicle) => {
-    // If changing vehicle with items in quote, confirm
     if (selectedVehicle && quoteItems.length > 0 && vehicle.vin !== selectedVehicle.vin) {
       if (!window.confirm('Changing vehicle will clear your quote. Continue?')) {
         return;
@@ -194,26 +216,36 @@ export function BookingModal({
     setHistoryLoading(false);
   };
 
-  const handleAddNewVehicle = () => {
-    const newVehicle = {
-      isNew: true,
-      vin: '',
-      year: '',
-      make: '',
-      model: '',
-      plate: '',
-      color: ''
-    };
-    setSelectedVehicle(newVehicle);
+  const handleChangeVehicle = () => {
+    if (quoteItems.length > 0) {
+      if (!window.confirm('Changing vehicle will clear your quote. Continue?')) {
+        return;
+      }
+      setQuoteItems([]);
+    }
+    setSelectedVehicle(null);
     setVehicleHistory(null);
   };
+
+  // Filter vehicles by search
+  const filteredVehicles = useMemo(() => {
+    if (!vehicleSearchTerm) return vehicles;
+    const term = vehicleSearchTerm.toLowerCase();
+    return vehicles.filter(v => 
+      v.year?.toString().includes(term) ||
+      v.make?.toLowerCase().includes(term) ||
+      v.model?.toLowerCase().includes(term) ||
+      v.plate?.toLowerCase().includes(term) ||
+      v.unit_number?.toLowerCase().includes(term) ||
+      v.vin?.toLowerCase().includes(term)
+    );
+  }, [vehicles, vehicleSearchTerm]);
 
   // ============================================
   // QUOTE MANAGEMENT
   // ============================================
 
   const addToQuote = (item) => {
-    // Check for duplicates
     const exists = quoteItems.find(q => 
       q.title === item.title && q.source_wo === item.source_wo
     );
@@ -222,19 +254,13 @@ export function BookingModal({
     setQuoteItems([...quoteItems, {
       ...item,
       id: Date.now(),
-      hours: item.labor_hours || 1,
+      hours: item.labor_hours || item.hours || 1,
       total: item.total || 0
     }]);
   };
 
   const removeFromQuote = (id) => {
     setQuoteItems(quoteItems.filter(q => q.id !== id));
-  };
-
-  const updateQuoteItem = (id, updates) => {
-    setQuoteItems(quoteItems.map(q => 
-      q.id === id ? { ...q, ...updates } : q
-    ));
   };
 
   // Calculate totals
@@ -266,14 +292,11 @@ export function BookingModal({
     setSaving(true);
 
     const appointmentData = {
-      // Customer
       customer_id: customer.id,
       customer_name: customer.file_as,
       customer_phone: customer.primary_phone,
       customer_email: customer.email,
       company_name: customer.company_name,
-      
-      // Vehicle
       vehicle_id: selectedVehicle.vehicle_id,
       vehicle_vin: selectedVehicle.vin,
       vehicle_year: selectedVehicle.year,
@@ -283,26 +306,17 @@ export function BookingModal({
       vehicle_color: selectedVehicle.color,
       vehicle_description: `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}`,
       vehicle_mileage: selectedVehicle.last_mileage,
-      
-      // Scheduling
       scheduled_date: formData.is_on_hold ? null : formData.scheduled_date,
       tech_id: formData.is_on_hold ? null : formData.tech_id,
       estimated_hours: totalHours || 1,
-      
-      // Hold
       is_on_hold: formData.is_on_hold,
       hold_reason: formData.is_on_hold ? 'scheduling' : null,
-      
-      // Services
       services: quoteItems,
       estimated_total: estimatedTotal,
-      
-      // Notes
       notes: formData.notes,
-      
-      // Status
       status: formData.is_on_hold ? 'hold' : 'scheduled',
-      source: 'manual'
+      source: 'manual',
+      protractor_updates: Object.keys(contactUpdateFlags).length > 0 ? contactUpdateFlags : null
     };
 
     try {
@@ -352,7 +366,6 @@ export function BookingModal({
 
         {/* 4 Panel Grid */}
         <div className="flex-1 grid grid-cols-4 gap-0 overflow-hidden">
-          {/* Panel 1: Customer */}
           <Panel1Customer
             customer={customer}
             searchTerm={searchTerm}
@@ -362,18 +375,21 @@ export function BookingModal({
             onSearch={handleSearch}
             onSelectCustomer={handleSelectCustomer}
             onClearCustomer={handleClearCustomer}
+            contactUpdateFlags={contactUpdateFlags}
+            setContactUpdateFlags={setContactUpdateFlags}
           />
 
-          {/* Panel 2: Vehicles */}
           <Panel2Vehicles
-            vehicles={vehicles}
+            vehicles={filteredVehicles}
+            allVehiclesCount={vehicles.length}
             selectedVehicle={selectedVehicle}
             onSelectVehicle={handleSelectVehicle}
-            onAddNewVehicle={handleAddNewVehicle}
+            onChangeVehicle={handleChangeVehicle}
+            searchTerm={vehicleSearchTerm}
+            onSearch={setVehicleSearchTerm}
             disabled={!customer}
           />
 
-          {/* Panel 3: History & Services */}
           <Panel3HistoryServices
             vehicleHistory={vehicleHistory}
             servicePackages={servicePackages}
@@ -382,11 +398,9 @@ export function BookingModal({
             disabled={!selectedVehicle}
           />
 
-          {/* Panel 4: Quote & Booking */}
           <Panel4QuoteBooking
             quoteItems={quoteItems}
             onRemoveItem={removeFromQuote}
-            onUpdateItem={updateQuoteItem}
             subtotal={subtotal}
             shopSupplies={shopSupplies}
             gst={gst}
@@ -400,8 +414,6 @@ export function BookingModal({
             onCancel={onClose}
             saving={saving}
             disabled={!selectedVehicle}
-            selectedVehicle={selectedVehicle}
-            onChangeVehicle={() => setSelectedVehicle(null)}
           />
         </div>
       </div>
@@ -421,8 +433,12 @@ function Panel1Customer({
   loading,
   onSearch,
   onSelectCustomer,
-  onClearCustomer
+  onClearCustomer,
+  contactUpdateFlags,
+  setContactUpdateFlags
 }) {
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
   if (loading) {
     return (
       <div className="border-r border-gray-200 flex items-center justify-center">
@@ -488,48 +504,94 @@ function Panel1Customer({
     );
   }
 
-  // Customer selected - show info
+  const toggleUpdateFlag = (field) => {
+    setContactUpdateFlags(prev => {
+      if (prev[field]) {
+        const { [field]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [field]: true };
+    });
+  };
+
+  const hasUpdateFlags = Object.keys(contactUpdateFlags).length > 0;
+
   return (
     <div className="border-r border-gray-200 flex flex-col overflow-hidden">
       {/* Customer Header */}
-      <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
+      <div className="p-3 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-gray-900 text-lg">{customer.file_as}</h3>
+              <h3 className="font-bold text-gray-900">{customer.file_as}</h3>
               <button
                 onClick={onClearCustomer}
-                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
                 title="Change customer"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
             {customer.company_name && customer.company_name !== customer.file_as && (
               <div className="text-sm text-gray-600 flex items-center gap-1">
-                <Building2 size={12} />
+                <Building2 size={11} />
                 {customer.company_name}
               </div>
             )}
           </div>
+          <button
+            onClick={() => setShowUpdateModal(true)}
+            className={`p-1.5 rounded text-xs flex items-center gap-1 ${
+              hasUpdateFlags 
+                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title="Flag contact info for update"
+          >
+            <Edit size={12} />
+            {hasUpdateFlags && <span>{Object.keys(contactUpdateFlags).length}</span>}
+          </button>
         </div>
 
+        {/* Phone Numbers - All of them */}
         <div className="space-y-1 text-sm">
           {customer.primary_phone && (
             <div className="flex items-center gap-2 text-gray-700">
-              <Phone size={12} className="text-gray-400" />
-              <span>{customer.primary_phone}</span>
+              <Phone size={11} className="text-gray-400 flex-shrink-0" />
+              <span className="flex-1">{customer.primary_phone}</span>
+              <span className="text-xs text-gray-400">Primary</span>
+            </div>
+          )}
+          {customer.secondary_phone && (
+            <div className="flex items-center gap-2 text-gray-700">
+              <Phone size={11} className="text-gray-400 flex-shrink-0" />
+              <span className="flex-1">{customer.secondary_phone}</span>
+              <span className="text-xs text-gray-400">Secondary</span>
+            </div>
+          )}
+          {customer.cell_phone && (
+            <div className="flex items-center gap-2 text-gray-700">
+              <Smartphone size={11} className="text-gray-400 flex-shrink-0" />
+              <span className="flex-1">{customer.cell_phone}</span>
+              <span className="text-xs text-gray-400">Cell</span>
+            </div>
+          )}
+          {customer.billing_phone && (
+            <div className="flex items-center gap-2 text-gray-700">
+              <CreditCard size={11} className="text-gray-400 flex-shrink-0" />
+              <span className="flex-1">{customer.billing_phone}</span>
+              <span className="text-xs text-gray-400">Billing</span>
             </div>
           )}
           {customer.email && (
             <div className="flex items-center gap-2 text-gray-700">
-              <Mail size={12} className="text-gray-400" />
-              <span className="truncate">{customer.email}</span>
+              <Mail size={11} className="text-gray-400 flex-shrink-0" />
+              <span className="truncate flex-1">{customer.email}</span>
             </div>
           )}
           {(customer.street || customer.city) && (
             <div className="flex items-center gap-2 text-gray-600">
-              <MapPin size={12} className="text-gray-400" />
+              <MapPin size={11} className="text-gray-400 flex-shrink-0" />
               <span className="truncate">
                 {[customer.street, customer.city, customer.state].filter(Boolean).join(', ')}
               </span>
@@ -537,66 +599,87 @@ function Panel1Customer({
           )}
         </div>
 
-        {/* Stats */}
-        <div className="flex flex-wrap gap-3 mt-3 text-xs">
+        {/* Stats Row */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-500">
           {customer.customer_since && (
-            <span className="text-gray-500">
-              <span className="font-semibold text-gray-700">
-                {new Date(customer.customer_since).getFullYear()}
-              </span> client
-            </span>
+            <span>Since <strong className="text-gray-700">{new Date(customer.customer_since).getFullYear()}</strong></span>
           )}
           {customer.lifetime_visits > 0 && (
-            <span className="text-gray-500">
-              <span className="font-semibold text-gray-700">{customer.lifetime_visits}</span> visits
-            </span>
+            <span><strong className="text-gray-700">{customer.lifetime_visits}</strong> visits</span>
           )}
           {customer.lifetime_spent > 0 && (
-            <span className="text-gray-500">
-              <span className="font-semibold text-gray-700">
-                ${customer.lifetime_spent.toLocaleString()}
-              </span> total
-            </span>
+            <span><strong className="text-gray-700">${customer.lifetime_spent.toLocaleString()}</strong></span>
+          )}
+          {customer.avg_visit_value > 0 && (
+            <span>Avg: <strong className="text-gray-700">${customer.avg_visit_value.toFixed(0)}</strong></span>
           )}
         </div>
 
         {/* Preferences */}
-        <div className="flex flex-wrap gap-1.5 mt-3">
+        <div className="flex flex-wrap gap-1 mt-2">
           {customer.prefers_call && (
-            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
-              <Phone size={10} /> Call
-            </span>
+            <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs">📞 Call</span>
           )}
           {customer.prefers_text && (
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs flex items-center gap-1">
-              <MessageSquare size={10} /> Text
-            </span>
+            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">💬 Text</span>
           )}
           {customer.prefers_email && (
-            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1">
-              <Mail size={10} /> Email
-            </span>
+            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">✉️ Email</span>
           )}
           {customer.is_supplier && (
-            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">
-              Supplier
-            </span>
+            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Supplier</span>
           )}
         </div>
       </div>
 
-      {/* Notes Section */}
+      {/* Shop Notes */}
       {customer.notes && (
-        <div className="p-3 border-b border-gray-200 bg-amber-50 flex-shrink-0">
-          <div className="text-xs font-medium text-amber-800 mb-1 flex items-center gap-1">
-            <AlertTriangle size={12} />
+        <div className="p-2 border-b border-gray-200 bg-amber-50 flex-shrink-0">
+          <div className="text-xs font-medium text-amber-800 mb-0.5 flex items-center gap-1">
+            <AlertTriangle size={10} />
             Shop Notes
           </div>
-          <div className="text-sm text-amber-900 whitespace-pre-wrap">{customer.notes}</div>
+          <div className="text-xs text-amber-900 whitespace-pre-wrap leading-tight">{customer.notes}</div>
         </div>
       )}
 
-      {/* Spacer */}
+      {/* Update Flags Display */}
+      {hasUpdateFlags && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex-shrink-0">
+          <div className="text-xs text-amber-800">
+            <strong>Flagged for update:</strong> {Object.keys(contactUpdateFlags).join(', ')}
+          </div>
+        </div>
+      )}
+
+      {/* Contact Update Modal */}
+      {showUpdateModal && (
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10">
+          <div className="bg-white rounded-lg shadow-xl p-4 w-64">
+            <h4 className="font-medium mb-3">Flag for Update in Protractor</h4>
+            <div className="space-y-2">
+              {['primary_phone', 'secondary_phone', 'cell_phone', 'email', 'address'].map(field => (
+                <label key={field} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!contactUpdateFlags[field]}
+                    onChange={() => toggleUpdateFlag(field)}
+                    className="rounded"
+                  />
+                  {field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowUpdateModal(false)}
+              className="mt-4 w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 bg-gray-50" />
     </div>
   );
@@ -608,9 +691,12 @@ function Panel1Customer({
 
 function Panel2Vehicles({
   vehicles,
+  allVehiclesCount,
   selectedVehicle,
   onSelectVehicle,
-  onAddNewVehicle,
+  onChangeVehicle,
+  searchTerm,
+  onSearch,
   disabled
 }) {
   if (disabled) {
@@ -626,14 +712,14 @@ function Panel2Vehicles({
 
   return (
     <div className="border-r border-gray-200 flex flex-col overflow-hidden">
-      {/* Selected Vehicle Card (Top) */}
+      {/* Selected Vehicle Display */}
       {selectedVehicle && !selectedVehicle.isNew && (
         <div className="p-3 border-b border-gray-200 bg-blue-50 flex-shrink-0">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-medium text-blue-700">Selected Vehicle</span>
             <button
-              onClick={() => onSelectVehicle(null)}
-              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={onChangeVehicle}
+              className="px-2 py-0.5 text-xs bg-blue-200 text-blue-800 rounded hover:bg-blue-300"
             >
               Change
             </button>
@@ -641,87 +727,42 @@ function Panel2Vehicles({
           <div className="font-semibold text-gray-900">
             {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
           </div>
-          <div className="text-sm text-gray-600 flex items-center gap-3">
-            {selectedVehicle.plate && <span>Plate: {selectedVehicle.plate}</span>}
-            {selectedVehicle.color && <span>{selectedVehicle.color}</span>}
-          </div>
-          {selectedVehicle.last_mileage && (
-            <div className="text-xs text-gray-500 mt-1">
-              {selectedVehicle.last_mileage.toLocaleString()} km
-              {selectedVehicle.estimated_current_mileage && (
-                <span> → est. {selectedVehicle.estimated_current_mileage.toLocaleString()} km</span>
-              )}
+          <div className="text-xs text-gray-600 space-y-0.5 mt-1">
+            {selectedVehicle.engine && (
+              <div>Engine: {selectedVehicle.engine}</div>
+            )}
+            <div className="flex gap-3">
+              {selectedVehicle.plate && <span>Plate: <strong>{selectedVehicle.plate}</strong></span>}
+              {selectedVehicle.unit_number && <span>Unit: <strong>{selectedVehicle.unit_number}</strong></span>}
+              {selectedVehicle.color && <span>{selectedVehicle.color}</span>}
             </div>
-          )}
+            {selectedVehicle.vin && (
+              <div className="mt-1">VIN: {formatVIN(selectedVehicle.vin)}</div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* New Vehicle Form */}
-      {selectedVehicle?.isNew && (
-        <div className="p-3 border-b border-gray-200 bg-green-50 flex-shrink-0">
-          <div className="text-xs font-medium text-green-700 mb-2">New Vehicle</div>
-          <div className="grid grid-cols-3 gap-2 mb-2">
+      {/* Search & Header */}
+      <div className="px-2 py-1.5 bg-gray-100 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Year"
-              maxLength={4}
-              value={selectedVehicle.year || ''}
-              onChange={(e) => onSelectVehicle({ ...selectedVehicle, year: e.target.value })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Make"
-              value={selectedVehicle.make || ''}
-              onChange={(e) => onSelectVehicle({ ...selectedVehicle, make: e.target.value })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Model"
-              value={selectedVehicle.model || ''}
-              onChange={(e) => onSelectVehicle({ ...selectedVehicle, model: e.target.value })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+              value={searchTerm}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search vehicles..."
+              className="w-full pl-6 pr-2 py-1 text-xs border border-gray-300 rounded focus:border-blue-500 outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              placeholder="Plate"
-              value={selectedVehicle.plate || ''}
-              onChange={(e) => onSelectVehicle({ ...selectedVehicle, plate: e.target.value.toUpperCase() })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
-            />
-            <input
-              type="text"
-              placeholder="VIN"
-              maxLength={17}
-              value={selectedVehicle.vin || ''}
-              onChange={(e) => onSelectVehicle({ ...selectedVehicle, vin: e.target.value.toUpperCase() })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
-            />
-          </div>
-          <button
-            onClick={() => onSelectVehicle(null)}
-            className="mt-2 text-xs text-gray-500 hover:text-gray-700"
-          >
-            ← Cancel
-          </button>
+          <span className="text-xs text-gray-500">
+            {vehicles.length === allVehiclesCount 
+              ? `${vehicles.length} vehicles`
+              : `${vehicles.length}/${allVehiclesCount}`
+            }
+          </span>
         </div>
-      )}
-
-      {/* Header */}
-      <div className="px-3 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-        <span className="text-sm font-medium text-gray-700">
-          Vehicles ({vehicles.length})
-        </span>
-        <button
-          onClick={onAddNewVehicle}
-          className="text-blue-600 hover:text-blue-800 p-1"
-          title="Add new vehicle"
-        >
-          <Plus size={16} />
-        </button>
       </div>
 
       {/* Vehicle List */}
@@ -738,13 +779,7 @@ function Panel2Vehicles({
         {vehicles.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <Car size={24} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No vehicles on file</p>
-            <button
-              onClick={onAddNewVehicle}
-              className="mt-2 text-blue-600 text-sm hover:underline"
-            >
-              + Add New Vehicle
-            </button>
+            <p className="text-sm">No vehicles found</p>
           </div>
         )}
       </div>
@@ -753,79 +788,140 @@ function Panel2Vehicles({
 }
 
 // ============================================
-// VEHICLE CARD COMPONENT
+// VEHICLE CARD COMPONENT - Improved
 // ============================================
 
 function VehicleCard({ vehicle, isSelected, onSelect }) {
-  const getStatusBadge = () => {
+  const [expanded, setExpanded] = useState(false);
+
+  const getStatusIcon = () => {
     const status = vehicle.service_status;
-    if (status === 'overdue') {
-      return <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">OVERDUE</span>;
-    }
-    if (status === 'due_soon') {
-      return <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">DUE SOON</span>;
-    }
-    return null;
+    if (status === 'overdue') return <span className="text-red-500">🔴</span>;
+    if (status === 'due_soon') return <span className="text-amber-500">🟡</span>;
+    return <span className="text-green-500">🟢</span>;
+  };
+
+  const toggleExpand = (e) => {
+    e.stopPropagation();
+    setExpanded(!expanded);
   };
 
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full text-left p-3 rounded-lg border transition-all ${
-        isSelected 
-          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
-          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="font-medium text-gray-900">
-            {vehicle.year} {vehicle.make} {vehicle.model}
+    <div className={`rounded-lg border transition-all ${
+      isSelected 
+        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
+        : 'border-gray-200 hover:border-gray-300 bg-white'
+    }`}>
+      {/* Main Card Content */}
+      <div className="p-2">
+        {/* Header Row */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            {getStatusIcon()}
+            <span className="font-medium text-sm text-gray-900">
+              {vehicle.year} {vehicle.make} {vehicle.model}
+            </span>
           </div>
-          {vehicle.color && (
-            <span className="text-sm text-gray-500">({vehicle.color})</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onSelect(); }}
+            className={`px-2 py-0.5 text-xs rounded ${
+              isSelected 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+            }`}
+          >
+            {isSelected ? 'Selected' : 'Select'}
+          </button>
+        </div>
+
+        {/* Info Row */}
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-600">
+          {vehicle.plate && <span>Plate: <strong>{vehicle.plate}</strong></span>}
+          {vehicle.unit_number && <span>Unit: <strong>{vehicle.unit_number}</strong></span>}
+          {vehicle.engine && <span className="text-gray-500 truncate max-w-[120px]">{vehicle.engine}</span>}
+        </div>
+
+        {/* Mileage & Service Row */}
+        <div className="text-xs text-gray-500 mt-1">
+          {vehicle.last_mileage && (
+            <span>
+              {vehicle.last_mileage.toLocaleString()} km
+              {vehicle.estimated_current_mileage && (
+                <span className="text-gray-400"> → ~{vehicle.estimated_current_mileage.toLocaleString()}</span>
+              )}
+            </span>
+          )}
+          {vehicle.days_since_service !== null && (
+            <span className="ml-2">
+              • {vehicle.days_since_service === 0 ? 'Today' : `${vehicle.days_since_service}d ago`}
+            </span>
           )}
         </div>
-        {getStatusBadge()}
-      </div>
 
-      <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-        {vehicle.plate && <div>Plate: {vehicle.plate}</div>}
-        {vehicle.last_mileage && (
-          <div>Last: {vehicle.last_mileage.toLocaleString()} km</div>
-        )}
-        {vehicle.days_since_service !== null && (
-          <div>
-            {vehicle.days_since_service === 0 
-              ? 'Serviced today'
-              : `${vehicle.days_since_service} days ago`
-            }
+        {/* Last 3 Invoices - Collapsed Headers */}
+        {vehicle.last_3_invoices?.length > 0 && (
+          <div className="mt-2 border-t border-gray-100 pt-1">
+            {vehicle.last_3_invoices.slice(0, 3).map((inv, i) => (
+              <InvoiceRow 
+                key={i} 
+                invoice={inv} 
+                expanded={expanded}
+                onToggle={i === 0 ? toggleExpand : undefined}
+                showToggle={i === 0}
+              />
+            ))}
+            {vehicle.last_3_invoices.some(inv => inv.deferred?.length > 0) && !expanded && (
+              <div className="text-xs text-amber-600 mt-1 pl-4">
+                ⚠️ Has deferred work
+              </div>
+            )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Last 3 invoices preview */}
-      {vehicle.last_3_invoices?.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          {vehicle.last_3_invoices.slice(0, 2).map((inv, i) => (
-            <div key={i} className="text-xs text-gray-500 flex justify-between">
-              <span>WO# {inv.workorder_number}</span>
-              <span>${inv.grand_total?.toFixed(0)}</span>
+// Invoice Row in Vehicle Card
+function InvoiceRow({ invoice, expanded, onToggle, showToggle }) {
+  return (
+    <div className="text-xs">
+      <div 
+        className={`flex items-center gap-1 py-0.5 ${showToggle ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+        onClick={showToggle ? onToggle : undefined}
+      >
+        {showToggle && (
+          <ChevronRight size={10} className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        )}
+        {!showToggle && <span className="w-2.5" />}
+        <span className="text-gray-500">{invoice.invoice_date}</span>
+        <span className="font-medium">WO# {invoice.workorder_number}</span>
+        <span className="ml-auto font-medium">${invoice.grand_total?.toFixed(0)}</span>
+      </div>
+      
+      {/* Expanded Content */}
+      {expanded && (
+        <div className="pl-4 py-1 space-y-0.5 bg-gray-50 rounded mb-1">
+          {invoice.completed_packages?.slice(0, 5).map((pkg, i) => (
+            <div key={i} className="flex justify-between text-gray-600">
+              <span className="truncate flex-1">{pkg.title}</span>
+              <span>${pkg.total?.toFixed(0)}</span>
             </div>
           ))}
-          {vehicle.last_3_invoices.some(inv => inv.deferred?.length > 0) && (
-            <div className="text-xs text-amber-600 mt-1">
-              ⚠️ Has deferred work
+          {invoice.deferred_packages?.filter(p => !p.is_header).map((pkg, i) => (
+            <div key={i} className="flex justify-between text-amber-600">
+              <span className="truncate flex-1">⚠️ {pkg.title}</span>
+              <span>${pkg.total?.toFixed(0)}</span>
             </div>
-          )}
+          ))}
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
 // ============================================
-// PANEL 3: HISTORY & SERVICES
+// PANEL 3: HISTORY & SERVICES (Tabbed)
 // ============================================
 
 function Panel3HistoryServices({
@@ -835,9 +931,44 @@ function Panel3HistoryServices({
   onAddToQuote,
   disabled
 }) {
-  const [activeTab, setActiveTab] = useState('history');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('services');
+  const [historySearch, setHistorySearch] = useState('');
   const [expandedInvoices, setExpandedInvoices] = useState({});
+  const [collapsedCategories, setCollapsedCategories] = useState({});
+
+  // Group packages by category, favorites first
+  const groupedPackages = useMemo(() => {
+    const groups = { favorites: [] };
+    (servicePackages || []).forEach(pkg => {
+      if (pkg.is_favorite) {
+        groups.favorites.push(pkg);
+      }
+      const cat = pkg.category || 'other';
+      if (!groups[cat]) groups[cat] = [];
+      if (!pkg.is_favorite) groups[cat].push(pkg);
+    });
+    return groups;
+  }, [servicePackages]);
+
+  // Initialize collapsed state - favorites open, rest closed
+  useEffect(() => {
+    const initial = {};
+    Object.keys(groupedPackages).forEach(cat => {
+      initial[cat] = cat !== 'favorites';
+    });
+    setCollapsedCategories(initial);
+  }, [groupedPackages]);
+
+  // Filter history by search
+  const filteredInvoices = useMemo(() => {
+    if (!historySearch || !vehicleHistory?.invoices) return vehicleHistory?.invoices || [];
+    const term = historySearch.toLowerCase();
+    return vehicleHistory.invoices.filter(inv =>
+      inv.workorder_number?.toLowerCase().includes(term) ||
+      inv.completed_packages?.some(p => p.title?.toLowerCase().includes(term)) ||
+      inv.deferred_packages?.some(p => p.title?.toLowerCase().includes(term))
+    );
+  }, [vehicleHistory, historySearch]);
 
   if (disabled) {
     return (
@@ -855,45 +986,24 @@ function Panel3HistoryServices({
       <div className="border-r border-gray-200 flex items-center justify-center">
         <div className="text-center text-gray-500">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <p>Loading history...</p>
+          <p>Loading...</p>
         </div>
       </div>
     );
   }
 
-  const toggleInvoice = (woNumber) => {
-    setExpandedInvoices(prev => ({
-      ...prev,
-      [woNumber]: !prev[woNumber]
-    }));
+  const toggleCategory = (cat) => {
+    setCollapsedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
 
-  // Filter invoices by search
-  const filteredInvoices = vehicleHistory?.invoices?.filter(inv => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      inv.workorder_number?.toLowerCase().includes(term) ||
-      inv.completed_packages?.some(p => p.title?.toLowerCase().includes(term)) ||
-      inv.deferred_packages?.some(p => p.title?.toLowerCase().includes(term))
-    );
-  }) || [];
+  const toggleInvoice = (woNumber) => {
+    setExpandedInvoices(prev => ({ ...prev, [woNumber]: !prev[woNumber] }));
+  };
 
   return (
     <div className="border-r border-gray-200 flex flex-col overflow-hidden">
       {/* Tabs */}
       <div className="flex border-b border-gray-200 flex-shrink-0">
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 px-4 py-2 text-sm font-medium ${
-            activeTab === 'history'
-              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <History size={14} className="inline mr-1" />
-          History
-        </button>
         <button
           onClick={() => setActiveTab('services')}
           className={`flex-1 px-4 py-2 text-sm font-medium ${
@@ -905,31 +1015,100 @@ function Panel3HistoryServices({
           <Package size={14} className="inline mr-1" />
           Services
         </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex-1 px-4 py-2 text-sm font-medium ${
+            activeTab === 'history'
+              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <History size={14} className="inline mr-1" />
+          History
+        </button>
       </div>
 
+      {/* SERVICES TAB */}
+      {activeTab === 'services' && (
+        <div className="flex-1 overflow-y-auto">
+          {/* Add Generic Service */}
+          <GenericServiceAdder onAddToQuote={onAddToQuote} />
+
+          {/* Grouped Packages */}
+          <div className="p-2 space-y-1">
+            {Object.entries(groupedPackages).map(([category, pkgs]) => {
+              if (pkgs.length === 0) return null;
+              const isCollapsed = collapsedCategories[category];
+              const isFavorites = category === 'favorites';
+
+              return (
+                <div key={category}>
+                  <button
+                    onClick={() => toggleCategory(category)}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium uppercase rounded ${
+                      isFavorites ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      {isFavorites && <Star size={10} className="fill-amber-500" />}
+                      {category} ({pkgs.length})
+                    </span>
+                    <ChevronDown size={12} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="mt-1 space-y-0.5">
+                      {pkgs.map(pkg => (
+                        <button
+                          key={pkg.id}
+                          onClick={() => onAddToQuote({
+                            title: pkg.name,
+                            total: pkg.base_price || 0,
+                            labor_hours: pkg.base_hours || 1,
+                            source: 'package'
+                          })}
+                          className="w-full flex items-center justify-between px-2 py-1.5 text-sm bg-white border border-gray-100 rounded hover:border-blue-300 hover:bg-blue-50"
+                        >
+                          <span className="truncate">{pkg.name}</span>
+                          <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0">
+                            <span>${pkg.base_price?.toFixed(0)}</span>
+                            <span>{pkg.base_hours}h</span>
+                            <Plus size={12} className="text-blue-500" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY TAB */}
       {activeTab === 'history' && (
         <>
           {/* Search */}
           <div className="p-2 border-b border-gray-200 flex-shrink-0">
             <div className="relative">
-              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
                 placeholder="Search history..."
-                className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none"
+                className="w-full pl-6 pr-2 py-1 text-xs border border-gray-300 rounded focus:border-blue-500 outline-none"
               />
             </div>
           </div>
 
           {/* Stats */}
           {vehicleHistory?.stats && (
-            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-              <div className="flex gap-4 text-xs text-gray-600">
+            <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="flex gap-3 text-xs text-gray-600">
                 <span><strong>{vehicleHistory.stats.total_invoices}</strong> visits</span>
                 <span><strong>${vehicleHistory.stats.total_spent?.toLocaleString()}</strong> total</span>
-                <span>Avg: <strong>${vehicleHistory.stats.avg_invoice?.toFixed(0)}</strong></span>
               </div>
             </div>
           )}
@@ -937,7 +1116,7 @@ function Panel3HistoryServices({
           {/* Invoice List */}
           <div className="flex-1 overflow-y-auto">
             {filteredInvoices.map((invoice) => (
-              <InvoiceCard
+              <HistoryInvoiceCard
                 key={invoice.workorder_number}
                 invoice={invoice}
                 expanded={expandedInvoices[invoice.workorder_number]}
@@ -955,35 +1134,78 @@ function Panel3HistoryServices({
           </div>
         </>
       )}
+    </div>
+  );
+}
 
-      {activeTab === 'services' && (
-        <div className="flex-1 overflow-y-auto p-2">
-          <ServicePackageList
-            packages={servicePackages}
-            onAddToQuote={onAddToQuote}
-          />
+// Generic Service Adder
+function GenericServiceAdder({ onAddToQuote }) {
+  const [hours, setHours] = useState('');
+  const [note, setNote] = useState('');
+
+  const handleAdd = () => {
+    const h = parseFloat(hours) || 0;
+    if (h <= 0) return;
+    
+    onAddToQuote({
+      title: note || 'Generic Service',
+      total: h * LABOR_RATE,
+      labor_hours: h,
+      labor_total: h * LABOR_RATE,
+      source: 'generic'
+    });
+    setHours('');
+    setNote('');
+  };
+
+  return (
+    <div className="p-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex gap-2">
+        <input
+          type="number"
+          step="0.5"
+          min="0"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          placeholder="Hrs"
+          className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none"
+        />
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Description..."
+          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={!hours || parseFloat(hours) <= 0}
+          className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          Add
+        </button>
+      </div>
+      {hours && parseFloat(hours) > 0 && (
+        <div className="text-xs text-gray-500 mt-1">
+          = ${(parseFloat(hours) * LABOR_RATE).toFixed(0)} @ ${LABOR_RATE}/hr
         </div>
       )}
     </div>
   );
 }
 
-// ============================================
-// INVOICE CARD COMPONENT
-// ============================================
-
-function InvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
-  const hasDeferred = invoice.deferred_packages?.length > 0;
+// History Invoice Card
+function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
+  const hasDeferred = invoice.deferred_packages?.filter(p => !p.is_header).length > 0;
 
   return (
     <div className="border-b border-gray-100">
-      {/* Header - always visible */}
       <button
         onClick={onToggle}
         className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
       >
         <ChevronRight 
-          size={14} 
+          size={12} 
           className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} 
         />
         <div className="flex-1">
@@ -991,7 +1213,7 @@ function InvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
             <span className="font-medium text-sm">WO# {invoice.workorder_number}</span>
             <span className="text-sm font-medium">${invoice.grand_total?.toFixed(0)}</span>
           </div>
-          <div className="text-xs text-gray-500 flex items-center gap-2">
+          <div className="text-xs text-gray-500 flex gap-2">
             <span>{invoice.invoice_date}</span>
             {invoice.mileage && <span>{invoice.mileage.toLocaleString()} km</span>}
             {hasDeferred && <span className="text-amber-600">⚠️ Deferred</span>}
@@ -999,37 +1221,57 @@ function InvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
         </div>
       </button>
 
-      {/* Expanded Content */}
       {expanded && (
-        <div className="px-3 pb-3 ml-6">
-          {/* Completed Packages */}
+        <div className="px-3 pb-2 ml-5 space-y-1">
+          {/* Completed */}
           {invoice.completed_packages?.map((pkg, i) => (
-            <div key={i} className="flex items-center justify-between py-1 text-sm border-b border-gray-50">
-              <div className="flex items-center gap-2">
-                <Check size={12} className="text-green-500" />
-                <span>{pkg.title}</span>
+            <div key={i} className="flex items-center justify-between py-1 text-sm hover:bg-gray-50 rounded px-1">
+              <div className="flex items-center gap-2 flex-1">
+                <Check size={12} className="text-green-500 flex-shrink-0" />
+                <span className="truncate">{pkg.title}</span>
               </div>
-              <span className="text-gray-600">${pkg.total?.toFixed(0)}</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-gray-500">{pkg.labor_hours}h</span>
+                <span className="text-gray-600">${pkg.total?.toFixed(0)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddToQuote({
+                      ...pkg,
+                      source: 'history_completed',
+                      source_wo: invoice.workorder_number
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
+                >
+                  +
+                </button>
+              </div>
             </div>
           ))}
 
-          {/* Deferred Packages */}
+          {/* Deferred */}
           {invoice.deferred_packages?.filter(p => !p.is_header).map((pkg, i) => (
-            <div key={i} className="flex items-center justify-between py-1 text-sm bg-amber-50 px-2 rounded mt-1">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={12} className="text-amber-500" />
-                <span className="text-amber-800">{pkg.title}</span>
+            <div key={i} className="flex items-center justify-between py-1 text-sm bg-amber-50 rounded px-1">
+              <div className="flex items-center gap-2 flex-1">
+                <AlertTriangle size={12} className="text-amber-500 flex-shrink-0" />
+                <span className="truncate text-amber-800">{pkg.title}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-amber-600">{pkg.labor_hours}h</span>
                 <span className="text-amber-700">${pkg.total?.toFixed(0)}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onAddToQuote(pkg);
+                    onAddToQuote({
+                      ...pkg,
+                      source: 'history_deferred',
+                      source_wo: invoice.workorder_number
+                    });
                   }}
-                  className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded text-xs hover:bg-amber-300"
+                  className="px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded text-xs hover:bg-amber-300"
                 >
-                  + Quote
+                  +
                 </button>
               </div>
             </div>
@@ -1041,57 +1283,12 @@ function InvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
 }
 
 // ============================================
-// SERVICE PACKAGE LIST
-// ============================================
-
-function ServicePackageList({ packages, onAddToQuote }) {
-  const grouped = packages?.reduce((acc, pkg) => {
-    const cat = pkg.category || 'other';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(pkg);
-    return acc;
-  }, {}) || {};
-
-  return (
-    <div className="space-y-4">
-      {Object.entries(grouped).map(([category, pkgs]) => (
-        <div key={category}>
-          <div className="text-xs font-medium text-gray-500 uppercase mb-2">{category}</div>
-          <div className="space-y-1">
-            {pkgs.map((pkg) => (
-              <button
-                key={pkg.id}
-                onClick={() => onAddToQuote({
-                  title: pkg.name,
-                  total: pkg.base_price || 0,
-                  labor_hours: pkg.base_hours || 1,
-                  source: 'package'
-                })}
-                className="w-full flex items-center justify-between p-2 text-sm bg-white border border-gray-200 rounded hover:border-blue-300 hover:bg-blue-50"
-              >
-                <span>{pkg.name}</span>
-                <div className="flex items-center gap-2 text-gray-500">
-                  <span>${pkg.base_price?.toFixed(0)}</span>
-                  <span className="text-xs">{pkg.base_hours}h</span>
-                  <Plus size={14} className="text-blue-500" />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ============================================
 // PANEL 4: QUOTE & BOOKING
 // ============================================
 
 function Panel4QuoteBooking({
   quoteItems,
   onRemoveItem,
-  onUpdateItem,
   subtotal,
   shopSupplies,
   gst,
@@ -1104,9 +1301,7 @@ function Panel4QuoteBooking({
   onSave,
   onCancel,
   saving,
-  disabled,
-  selectedVehicle,
-  onChangeVehicle
+  disabled
 }) {
   if (disabled) {
     return (
@@ -1121,47 +1316,46 @@ function Panel4QuoteBooking({
 
   return (
     <div className="flex flex-col overflow-hidden">
-      {/* Header with vehicle */}
-      <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+      {/* Header */}
+      <div className="px-3 py-2 bg-gray-100 border-b border-gray-200 flex-shrink-0">
         <span className="text-sm font-medium text-gray-700">Quote & Booking</span>
-        {selectedVehicle && (
-          <button
-            onClick={onChangeVehicle}
-            className="text-xs text-blue-600 hover:text-blue-800"
-          >
-            Change Vehicle
-          </button>
-        )}
       </div>
 
       {/* Quote Items */}
-      <div className="flex-1 overflow-y-auto p-3">
-        <div className="text-xs font-medium text-gray-500 mb-2">
+      <div className="flex-1 overflow-y-auto p-2">
+        <div className="text-xs text-gray-500 mb-2">
           Services ({quoteItems.length}) — {totalHours.toFixed(1)}h
         </div>
 
         {quoteItems.length === 0 ? (
-          <div className="text-center text-gray-400 py-8">
-            <Package size={24} className="mx-auto mb-2 opacity-50" />
+          <div className="text-center text-gray-400 py-6">
+            <Package size={20} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No services added</p>
-            <p className="text-xs">Select from history or packages</p>
+            <p className="text-xs">Select from Services or History</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {quoteItems.map((item) => (
               <div 
                 key={item.id}
                 className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded text-sm"
               >
-                <div className="flex-1">
-                  <div className="font-medium">{item.title}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{item.title}</div>
                   <div className="text-xs text-gray-500">
                     {item.hours}h · ${item.total?.toFixed(0)}
+                    {item.source && (
+                      <span className="ml-1 text-gray-400">
+                        ({item.source === 'history_deferred' ? 'def' : 
+                          item.source === 'history_completed' ? 'prev' : 
+                          item.source === 'generic' ? 'gen' : 'pkg'})
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
                   onClick={() => onRemoveItem(item.id)}
-                  className="p-1 text-gray-400 hover:text-red-500"
+                  className="p-1 text-gray-400 hover:text-red-500 flex-shrink-0"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -1171,40 +1365,40 @@ function Panel4QuoteBooking({
         )}
       </div>
 
-      {/* Totals - Compact */}
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+      {/* Totals - Compact Single Line */}
+      <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
           <span>Sub: ${subtotal.toFixed(0)}</span>
-          <span>+Supplies: ${shopSupplies.toFixed(0)}</span>
+          <span>+Sup: ${shopSupplies.toFixed(0)}</span>
           <span>+GST: ${gst.toFixed(0)}</span>
-          <span>+Buffer: ${buffer.toFixed(0)}</span>
+          <span>+Buf: ${buffer.toFixed(0)}</span>
         </div>
-        <div className="flex items-center justify-between mt-1">
-          <span className="font-semibold">Estimate</span>
-          <span className="text-xl font-bold text-green-600">${estimatedTotal.toFixed(0)}</span>
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-sm">Estimate</span>
+          <span className="text-lg font-bold text-green-600">${estimatedTotal.toFixed(0)}</span>
         </div>
       </div>
 
       {/* Booking Form */}
-      <div className="p-4 border-t border-gray-200 space-y-3 flex-shrink-0">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="p-3 border-t border-gray-200 space-y-2 flex-shrink-0">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+            <label className="block text-xs text-gray-600 mb-0.5">Date</label>
             <input
               type="date"
               value={formData.scheduled_date}
               onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
               disabled={formData.is_on_hold}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm disabled:bg-gray-100"
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm disabled:bg-gray-100"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Technician</label>
+            <label className="block text-xs text-gray-600 mb-0.5">Technician</label>
             <select
               value={formData.tech_id}
               onChange={(e) => setFormData({ ...formData, tech_id: e.target.value })}
               disabled={formData.is_on_hold}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm disabled:bg-gray-100"
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm disabled:bg-gray-100"
             >
               <option value="">Select tech...</option>
               {technicians.map(tech => (
@@ -1215,13 +1409,13 @@ function Panel4QuoteBooking({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+          <label className="block text-xs text-gray-600 mb-0.5">Notes</label>
           <textarea
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Appointment notes..."
             rows={2}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm resize-none"
           />
         </div>
 
@@ -1237,17 +1431,17 @@ function Panel4QuoteBooking({
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-gray-200 flex gap-3 flex-shrink-0">
+      <div className="p-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
         <button
           onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm"
         >
           Cancel
         </button>
         <button
           onClick={onSave}
           disabled={saving}
-          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 flex items-center justify-center gap-2"
+          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300 text-sm flex items-center justify-center gap-1"
         >
           {saving ? (
             <>
@@ -1256,8 +1450,8 @@ function Panel4QuoteBooking({
             </>
           ) : (
             <>
-              <Calendar size={16} />
-              Book Appointment
+              <Calendar size={14} />
+              Book
             </>
           )}
         </button>
