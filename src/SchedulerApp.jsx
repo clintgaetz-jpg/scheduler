@@ -656,6 +656,11 @@ export default function SchedulerApp() {
             weekDates={weekDates}
             currentDate={currentDate}
             navigateWeek={navigateWeek}
+            goToToday={() => {
+              const today = new Date();
+              setCurrentDate(today);
+              setSelectedDate(today.toISOString().split('T')[0]);
+            }}
             getTechHours={getTechHours}
             onOpenDetail={openDetailModal}
             onUpdateAppointment={handleUpdateAppointment}
@@ -738,7 +743,7 @@ export default function SchedulerApp() {
 // ============================================
 function SchedulerView({ 
   technicians, appointments, dayAppointments, selectedDate, setSelectedDate, 
-  weekDates, currentDate, navigateWeek, getTechHours, onOpenDetail, onUpdateAppointment,
+  weekDates, currentDate, navigateWeek, goToToday, getTechHours, onOpenDetail, onUpdateAppointment,
   onDeleteAppointment, onDragStart, onDragEnd, onDrop, onDropToHold, draggedJob,
   servicePackages
 }) {
@@ -749,13 +754,30 @@ function SchedulerView({
   const weekEnd = new Date(weekDates[4] + 'T00:00:00');
   const weekRangeText = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   
+  // Calculate daily stats for each day in the week
+  const getDayStats = (date) => {
+    const dayAppts = appointments.filter(a => 
+      a.scheduled_date === date && 
+      !['cancelled', 'deleted'].includes(a.status) &&
+      !a.is_on_hold
+    );
+    const vehicleCount = dayAppts.length;
+    const totalHours = dayAppts.reduce((sum, a) => sum + (parseFloat(a.estimated_hours) || 0), 0);
+    
+    // Total available hours from all visible techs
+    const totalCapacity = technicians.reduce((sum, t) => sum + (t.hours_per_day || 8), 0);
+    const utilizationPct = totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0;
+    
+    return { vehicleCount, totalHours, totalCapacity, utilizationPct };
+  };
+  
   return (
     <div className="h-full flex flex-col">
       {/* ============================================ */}
       {/* REDESIGNED DATE NAVIGATION - BIGGER & BOLDER */}
       {/* ============================================ */}
       <div className="bg-white border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center h-20">
+        <div className="flex items-center h-24">
           {/* Previous Week Button */}
           <button 
             onClick={() => navigateWeek(-1)} 
@@ -773,13 +795,19 @@ function SchedulerView({
               const dayNum = dateObj.getDate();
               const isSelected = d === selectedDate;
               const isToday = d === today;
+              const stats = getDayStats(d);
+              
+              // Utilization bar color
+              const utilColor = stats.utilizationPct > 100 ? 'bg-red-500' : 
+                               stats.utilizationPct > 80 ? 'bg-amber-500' : 
+                               stats.utilizationPct > 0 ? 'bg-green-500' : 'bg-gray-300';
               
               return (
                 <button 
                   key={d} 
                   onClick={() => setSelectedDate(d)} 
                   className={`
-                    flex-1 flex flex-col items-center justify-center border-r border-gray-200 
+                    flex-1 flex flex-col items-center justify-between py-2 border-r border-gray-200 
                     transition-all relative
                     ${isSelected 
                       ? 'bg-blue-600 text-white' 
@@ -787,31 +815,38 @@ function SchedulerView({
                     }
                   `}
                 >
-                  {/* Today indicator */}
-                  {isToday && !isSelected && (
-                    <div className="absolute top-1 left-1/2 -translate-x-1/2">
-                      <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
+                  {/* Top section: Day name + Today badge */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-semibold tracking-wide ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                      {dayName}
+                    </span>
+                    {isToday && (
+                      <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                        isSelected ? 'text-blue-600 bg-white' : 'text-blue-600 bg-blue-100'
+                      }`}>
                         TODAY
                       </span>
-                    </div>
-                  )}
-                  {isToday && isSelected && (
-                    <div className="absolute top-1 left-1/2 -translate-x-1/2">
-                      <span className="text-[10px] font-bold text-blue-100 bg-blue-500 px-1.5 py-0.5 rounded">
-                        TODAY
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Day name */}
-                  <span className={`text-xs font-semibold tracking-wide ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {dayName}
-                  </span>
+                    )}
+                  </div>
                   
                   {/* Day number */}
-                  <span className={`text-2xl font-bold mt-0.5 ${isSelected ? 'text-white' : ''}`}>
+                  <span className={`text-2xl font-bold ${isSelected ? 'text-white' : ''}`}>
                     {dayNum}
                   </span>
+                  
+                  {/* Stats row: vehicle count + hours */}
+                  <div className={`flex items-center gap-2 text-[10px] ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
+                    <span>🚗 {stats.vehicleCount}</span>
+                    <span>{stats.totalHours.toFixed(1)}h</span>
+                  </div>
+                  
+                  {/* Utilization bar at bottom */}
+                  <div className={`absolute bottom-0 left-0 right-0 h-1 ${isSelected ? 'bg-blue-400' : 'bg-gray-200'}`}>
+                    <div 
+                      className={`h-full ${isSelected ? 'bg-white/50' : utilColor} transition-all`}
+                      style={{ width: `${Math.min(stats.utilizationPct, 100)}%` }}
+                    />
+                  </div>
                 </button>
               );
             })}
@@ -829,17 +864,7 @@ function SchedulerView({
           {/* Today Button + Week Info */}
           <div className="h-full px-4 flex flex-col items-center justify-center border-l border-gray-200 min-w-[140px]">
             <button 
-              onClick={() => {
-                // Don't allow jumping to weekend
-                if (!isWeekend(today)) {
-                  setSelectedDate(today);
-                  // Also navigate to current week if not there
-                  const todayWeek = getWeekDates(new Date());
-                  if (!weekDates.includes(today)) {
-                    navigateWeek(0); // This won't work, need to recalculate
-                  }
-                }
-              }} 
+              onClick={goToToday}
               className="px-4 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             >
               Today
