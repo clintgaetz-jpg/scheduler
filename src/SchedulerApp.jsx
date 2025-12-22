@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Search, ChevronLeft, ChevronRight, Plus, Calendar, Coffee, Settings, 
   FileText, DollarSign, Package, Clock, CheckCircle2, Bell, Trash2,
-  UserPlus, X, AlertCircle, RefreshCw
+  UserPlus, X, AlertCircle, RefreshCw, StickyNote
 } from 'lucide-react';
 
 // Component imports
@@ -151,6 +151,9 @@ export default function SchedulerApp() {
   const [serviceCategories, setServiceCategories] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [settings, setSettings] = useState({});
+  const [holidays, setHolidays] = useState([]);
+  const [techTimeOff, setTechTimeOff] = useState([]);
+  const [dayNotes, setDayNotes] = useState([]);
   
   // UI state
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -169,6 +172,7 @@ export default function SchedulerApp() {
   const [detailModal, setDetailModal] = useState({ isOpen: false, appointment: null });
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [noteModal, setNoteModal] = useState({ isOpen: false, date: null, note: '' });
   
   const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
 
@@ -182,7 +186,7 @@ export default function SchedulerApp() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [techsData, packagesData, categoriesData, settingsData, apptsData] = await Promise.all([
+      const [techsData, packagesData, categoriesData, settingsData, apptsData, holidaysData, timeOffData, notesData] = await Promise.all([
         supabase.fetch('technicians', { order: 'sort_order' }),
         supabase.fetch('service_packages', { order: 'sort_order', filters: { is_active: 'eq.true' } }),
         supabase.fetch('service_categories', { order: 'sort_order' }),
@@ -192,12 +196,18 @@ export default function SchedulerApp() {
           order: 'scheduled_date.desc',
           filters: { status: 'neq.deleted' }
         }),
+        supabase.fetch('holidays', { order: 'holiday_date' }),
+        supabase.fetch('tech_time_off', { order: 'start_date' }),
+        supabase.fetch('day_notes', { order: 'note_date' }).catch(() => []), // May not exist yet
       ]);
       
       setTechnicians(techsData || []);
       setServicePackages(packagesData || []);
       setServiceCategories(categoriesData || []);
       setAppointments(apptsData || []);
+      setHolidays(holidaysData || []);
+      setTechTimeOff(timeOffData || []);
+      setDayNotes(notesData || []);
       
       const settingsObj = {};
       (settingsData || []).forEach(s => {
@@ -472,6 +482,52 @@ export default function SchedulerApp() {
     }));
   };
 
+  // Day note handlers
+  const openNoteModal = (date) => {
+    const existingNote = dayNotes.find(n => n.note_date === date);
+    setNoteModal({ 
+      isOpen: true, 
+      date, 
+      note: existingNote?.note || '',
+      noteType: existingNote?.note_type || 'info',
+      id: existingNote?.id || null
+    });
+  };
+
+  const handleSaveNote = async () => {
+    try {
+      if (noteModal.id) {
+        // Update existing
+        if (noteModal.note.trim()) {
+          await supabase.update('day_notes', noteModal.id, { 
+            note: noteModal.note,
+            note_type: noteModal.noteType
+          });
+        } else {
+          // Delete if empty
+          await fetch(`${SUPABASE_URL}/rest/v1/day_notes?id=eq.${noteModal.id}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            }
+          });
+        }
+      } else if (noteModal.note.trim()) {
+        // Insert new
+        await supabase.insert('day_notes', { 
+          note_date: noteModal.date, 
+          note: noteModal.note,
+          note_type: noteModal.noteType
+        });
+      }
+      await loadAllData();
+      setNoteModal({ isOpen: false, date: null, note: '', noteType: 'info', id: null });
+    } catch (err) {
+      console.error('Failed to save note:', err);
+    }
+  };
+
   // ============================================
   // RENDER
   // ============================================
@@ -671,6 +727,10 @@ export default function SchedulerApp() {
             onDropToHold={handleDropToHold}
             draggedJob={draggedJob}
             servicePackages={servicePackages}
+            holidays={holidays}
+            techTimeOff={techTimeOff}
+            dayNotes={dayNotes}
+            onOpenNoteModal={openNoteModal}
           />
         )}
 
@@ -733,6 +793,96 @@ export default function SchedulerApp() {
         onStatusChange={() => loadAllData()}
       />
 
+      {/* Day Note Modal */}
+      {noteModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">
+                📝 Note for {new Date(noteModal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </h3>
+              <button onClick={() => setNoteModal({ isOpen: false, date: null, note: '', noteType: 'info', id: null })} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Note Type Selector */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setNoteModal({ ...noteModal, noteType: 'info' })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    noteModal.noteType === 'info' 
+                      ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  ℹ️ Info
+                </button>
+                <button
+                  onClick={() => setNoteModal({ ...noteModal, noteType: 'warning' })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    noteModal.noteType === 'warning' 
+                      ? 'bg-amber-100 text-amber-700 ring-2 ring-amber-500' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  ⚠️ Warning
+                </button>
+                <button
+                  onClick={() => setNoteModal({ ...noteModal, noteType: 'closure' })}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    noteModal.noteType === 'closure' 
+                      ? 'bg-red-100 text-red-700 ring-2 ring-red-500' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  🚫 Closure
+                </button>
+              </div>
+              
+              {/* Note Text */}
+              <textarea
+                value={noteModal.note}
+                onChange={(e) => setNoteModal({ ...noteModal, note: e.target.value })}
+                placeholder={
+                  noteModal.noteType === 'info' ? "e.g., 'Fleet customer dropping 3 vehicles AM'" :
+                  noteModal.noteType === 'warning' ? "e.g., 'Tyler out sick - reduce capacity by 8h'" :
+                  "e.g., 'Shop Closed - Emergency'"
+                }
+                className={`w-full h-28 px-3 py-2 border rounded-lg focus:ring-2 resize-none ${
+                  noteModal.noteType === 'closure' 
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                    : noteModal.noteType === 'warning'
+                      ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500'
+                      : 'border-blue-300 focus:ring-blue-500 focus:border-blue-500'
+                }`}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setNoteModal({ isOpen: false, date: null, note: '', noteType: 'info', id: null })}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNote}
+                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                  noteModal.noteType === 'closure' 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : noteModal.noteType === 'warning'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                Save Note
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TODO: Add SearchModal and RequestsPanel components */}
     </div>
   );
@@ -745,7 +895,7 @@ function SchedulerView({
   technicians, appointments, dayAppointments, selectedDate, setSelectedDate, 
   weekDates, currentDate, navigateWeek, goToToday, getTechHours, onOpenDetail, onUpdateAppointment,
   onDeleteAppointment, onDragStart, onDragEnd, onDrop, onDropToHold, draggedJob,
-  servicePackages
+  servicePackages, holidays, techTimeOff, dayNotes, onOpenNoteModal
 }) {
   const today = new Date().toISOString().split('T')[0];
   
@@ -753,6 +903,42 @@ function SchedulerView({
   const weekStart = new Date(weekDates[0] + 'T00:00:00');
   const weekEnd = new Date(weekDates[4] + 'T00:00:00');
   const weekRangeText = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  
+  // Check if a date is a shop closure (uses holidays table with is_closed flag)
+  const getHolidayForDate = (date) => {
+    return holidays?.find(h => h.holiday_date === date);
+  };
+  
+  // Check if shop is closed on date
+  const isShopClosed = (date) => {
+    const holiday = getHolidayForDate(date);
+    return holiday?.is_closed === true;
+  };
+  
+  // Get note for a date
+  const getNoteForDate = (date) => {
+    return dayNotes?.find(n => n.note_date === date);
+  };
+  
+  // Get time off for tech on date (uses start_date/end_date range)
+  const getTechTimeOffForDate = (techId, date) => {
+    return techTimeOff?.find(t => 
+      t.tech_id === techId && 
+      date >= t.start_date && 
+      date <= t.end_date &&
+      t.is_approved !== false
+    );
+  };
+  
+  // Check if any day in the week has a note (for badge)
+  const notesThisWeek = dayNotes?.filter(n => weekDates.includes(n.note_date)) || [];
+  
+  // Check if selected date has a note
+  const selectedDateNote = getNoteForDate(selectedDate);
+  
+  // Check if selected date is a closure
+  const selectedDateHoliday = getHolidayForDate(selectedDate);
+  const selectedDateClosed = selectedDateHoliday?.is_closed === true;
   
   // Calculate daily stats for each day in the week
   const getDayStats = (date) => {
@@ -796,6 +982,9 @@ function SchedulerView({
               const isSelected = d === selectedDate;
               const isToday = d === today;
               const stats = getDayStats(d);
+              const holiday = getHolidayForDate(d);
+              const isClosed = holiday?.is_closed === true;
+              const note = getNoteForDate(d);
               
               // Utilization bar color
               const utilColor = stats.utilizationPct > 100 ? 'bg-red-500' : 
@@ -809,44 +998,82 @@ function SchedulerView({
                   className={`
                     flex-1 flex flex-col items-center justify-between py-2 border-r border-gray-200 
                     transition-all relative
-                    ${isSelected 
-                      ? 'bg-blue-600 text-white' 
-                      : 'hover:bg-gray-50 text-gray-700'
+                    ${isClosed 
+                      ? 'bg-red-100 text-red-700' 
+                      : isSelected 
+                        ? 'bg-blue-600 text-white' 
+                        : 'hover:bg-gray-50 text-gray-700'
                     }
                   `}
                 >
-                  {/* Top section: Day name + Today badge */}
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-xs font-semibold tracking-wide ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                  {/* Top section: Day name + Today badge + Note icon */}
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-semibold tracking-wide ${
+                      isClosed ? 'text-red-600' : isSelected ? 'text-blue-100' : 'text-gray-500'
+                    }`}>
                       {dayName}
                     </span>
-                    {isToday && (
+                    {isToday && !isClosed && (
                       <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
                         isSelected ? 'text-blue-600 bg-white' : 'text-blue-600 bg-blue-100'
                       }`}>
                         TODAY
                       </span>
                     )}
+                    {note && (
+                      <StickyNote size={12} className={`${
+                        note.note_type === 'closure' 
+                          ? 'text-red-500' 
+                          : note.note_type === 'warning'
+                            ? 'text-amber-500'
+                            : isSelected ? 'text-blue-200' : 'text-blue-500'
+                      }`} />
+                    )}
                   </div>
                   
-                  {/* Day number */}
-                  <span className={`text-2xl font-bold ${isSelected ? 'text-white' : ''}`}>
-                    {dayNum}
-                  </span>
+                  {/* Day number or CLOSED */}
+                  {isClosed ? (
+                    <div className="flex flex-col items-center">
+                      <span className="text-lg font-bold text-red-600">{dayNum}</span>
+                      <span className="text-[10px] font-bold text-red-500">CLOSED</span>
+                    </div>
+                  ) : (
+                    <span className={`text-2xl font-bold ${isSelected ? 'text-white' : ''}`}>
+                      {dayNum}
+                    </span>
+                  )}
                   
-                  {/* Stats row: vehicle count + hours */}
-                  <div className={`flex items-center gap-2 text-[10px] ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
-                    <span>🚗 {stats.vehicleCount}</span>
-                    <span>{stats.totalHours.toFixed(1)}h</span>
-                  </div>
+                  {/* Stats row: vehicle count + hours (hide if closed) */}
+                  {!isClosed && (
+                    <div className={`flex items-center gap-2 text-[10px] ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
+                      <span>🚗 {stats.vehicleCount}</span>
+                      <span>{stats.totalHours.toFixed(1)}h</span>
+                    </div>
+                  )}
                   
-                  {/* Utilization bar at bottom */}
-                  <div className={`absolute bottom-0 left-0 right-0 h-1 ${isSelected ? 'bg-blue-400' : 'bg-gray-200'}`}>
-                    <div 
-                      className={`h-full ${isSelected ? 'bg-white/50' : utilColor} transition-all`}
-                      style={{ width: `${Math.min(stats.utilizationPct, 100)}%` }}
-                    />
-                  </div>
+                  {/* Holiday name (if closed) */}
+                  {isClosed && holiday?.name && (
+                    <span className="text-[9px] text-red-500 truncate max-w-full px-1">
+                      {holiday.name}
+                    </span>
+                  )}
+                  
+                  {/* Early close indicator (if not fully closed) */}
+                  {!isClosed && holiday?.close_early_time && (
+                    <span className="text-[9px] text-amber-600 truncate max-w-full px-1">
+                      Closes {holiday.close_early_time.slice(0, 5)}
+                    </span>
+                  )}
+                  
+                  {/* Utilization bar at bottom (hide if closed) */}
+                  {!isClosed && (
+                    <div className={`absolute bottom-0 left-0 right-0 h-1 ${isSelected ? 'bg-blue-400' : 'bg-gray-200'}`}>
+                      <div 
+                        className={`h-full ${isSelected ? 'bg-white/50' : utilColor} transition-all`}
+                        style={{ width: `${Math.min(stats.utilizationPct, 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -861,14 +1088,34 @@ function SchedulerView({
             <ChevronRight size={28} className="text-gray-400 group-hover:text-gray-700" />
           </button>
 
-          {/* Today Button + Week Info */}
+          {/* Today Button + Note + Week Info */}
           <div className="h-full px-4 flex flex-col items-center justify-center border-l border-gray-200 min-w-[140px]">
-            <button 
-              onClick={goToToday}
-              className="px-4 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              Today
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={goToToday}
+                className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => onOpenNoteModal(selectedDate)}
+                className="relative p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Add/edit note for selected day"
+              >
+                <StickyNote size={18} />
+                {notesThisWeek.length > 0 && (
+                  <span className={`absolute -top-1 -right-1 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold ${
+                    notesThisWeek.some(n => n.note_type === 'closure') 
+                      ? 'bg-red-500' 
+                      : notesThisWeek.some(n => n.note_type === 'warning')
+                        ? 'bg-amber-500'
+                        : 'bg-blue-500'
+                  }`}>
+                    {notesThisWeek.length}
+                  </span>
+                )}
+              </button>
+            </div>
             <span className="text-[10px] text-gray-400 mt-1">{weekRangeText}</span>
           </div>
         </div>
@@ -876,37 +1123,97 @@ function SchedulerView({
 
       {/* Tech Columns + Hold Column */}
       <div className="flex-1 p-4 overflow-hidden">
-        <div className="flex gap-3 h-full">
-          {/* Tech Columns - flex equally to fill space */}
-          <div className="flex-1 flex gap-3 min-w-0">
-            {technicians.map(tech => (
-              <TechColumn 
-                key={tech.id}
-                tech={tech}
-                date={selectedDate}
-                hours={getTechHours(tech.id, selectedDate)}
-                appointments={dayAppointments.filter(a => a.tech_id === tech.id)}
-                onOpenDetail={onOpenDetail}
-                onUpdateAppointment={onUpdateAppointment}
+        <div className="flex flex-col h-full gap-2">
+          {/* Day Note Banner (if exists) */}
+          {selectedDateNote && (
+            <div 
+              onClick={() => onOpenNoteModal(selectedDate)}
+              className={`rounded-lg px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors flex-shrink-0 ${
+                selectedDateNote.note_type === 'closure' 
+                  ? 'bg-red-50 border border-red-200 hover:bg-red-100' 
+                  : selectedDateNote.note_type === 'warning'
+                    ? 'bg-amber-50 border border-amber-200 hover:bg-amber-100'
+                    : 'bg-blue-50 border border-blue-200 hover:bg-blue-100'
+              }`}
+            >
+              <StickyNote size={16} className={`flex-shrink-0 ${
+                selectedDateNote.note_type === 'closure' 
+                  ? 'text-red-600' 
+                  : selectedDateNote.note_type === 'warning'
+                    ? 'text-amber-600'
+                    : 'text-blue-600'
+              }`} />
+              <span className={`text-sm ${
+                selectedDateNote.note_type === 'closure' 
+                  ? 'text-red-800' 
+                  : selectedDateNote.note_type === 'warning'
+                    ? 'text-amber-800'
+                    : 'text-blue-800'
+              }`}>{selectedDateNote.note}</span>
+            </div>
+          )}
+          
+          {/* Shop Closure Banner (if closed) */}
+          {selectedDateClosed && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3 flex-shrink-0">
+              <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
+              <div>
+                <span className="text-sm font-semibold text-red-700">Shop Closed</span>
+                {selectedDateHoliday?.name && (
+                  <span className="text-sm text-red-600 ml-2">— {selectedDateHoliday.name}</span>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Early Close Banner (if closing early but not fully closed) */}
+          {!selectedDateClosed && selectedDateHoliday?.close_early_time && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 flex items-center gap-2 flex-shrink-0">
+              <Clock size={16} className="text-amber-600 flex-shrink-0" />
+              <span className="text-sm text-amber-800">
+                Early close today at {selectedDateHoliday.close_early_time.slice(0, 5)}
+                {selectedDateHoliday.name && ` — ${selectedDateHoliday.name}`}
+              </span>
+            </div>
+          )}
+          
+          {/* Main columns area */}
+          <div className="flex-1 flex gap-3 min-h-0">
+            {/* Tech Columns - flex equally to fill space */}
+            <div className="flex-1 flex gap-3 min-w-0">
+              {technicians.map(tech => {
+                const techOff = getTechTimeOffForDate(tech.id, selectedDate);
+                return (
+                  <TechColumn 
+                    key={tech.id}
+                    tech={tech}
+                    date={selectedDate}
+                    hours={getTechHours(tech.id, selectedDate)}
+                    appointments={dayAppointments.filter(a => a.tech_id === tech.id)}
+                    onOpenDetail={onOpenDetail}
+                    onUpdateAppointment={onUpdateAppointment}
+                    onDragStart={onDragStart}
+                    onDragEnd={onDragEnd}
+                    onDrop={onDrop}
+                    draggedJob={draggedJob}
+                    servicePackages={servicePackages}
+                    timeOff={techOff}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Hold Column - fixed width on right */}
+            <div className="w-64 flex-shrink-0">
+              <StatusColumn
+                appointments={appointments}
+                selectedDate={selectedDate}
+                onSelectAppointment={onOpenDetail}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
-                onDrop={onDrop}
-                draggedJob={draggedJob}
-                servicePackages={servicePackages}
+                onDropToCalendar={onDropToHold}
               />
-            ))}
-          </div>
-
-          {/* Hold Column - fixed width on right */}
-          <div className="w-64 flex-shrink-0">
-            <StatusColumn
-              appointments={appointments}
-              selectedDate={selectedDate}
-              onSelectAppointment={onOpenDetail}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onDropToCalendar={onDropToHold}
-            />
+            </div>
           </div>
         </div>
       </div>
@@ -919,12 +1226,13 @@ function SchedulerView({
 // ============================================
 function TechColumn({ 
   tech, date, hours, appointments, onOpenDetail, onUpdateAppointment, 
-  onDragStart, onDragEnd, onDrop, draggedJob, servicePackages
+  onDragStart, onDragEnd, onDrop, draggedJob, servicePackages, timeOff
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDragOver = (e) => {
     e.preventDefault();
+    if (timeOff) return; // Don't allow drop on day off
     setIsDragOver(true);
   };
 
@@ -935,11 +1243,43 @@ function TechColumn({
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
+    if (timeOff) return; // Don't allow drop on day off
     onDrop(tech.id, date);
   };
 
   const utilizationPct = hours.total > 0 ? (hours.booked / hours.total) * 100 : 0;
   const utilizationColor = utilizationPct > 100 ? 'bg-red-500' : utilizationPct > 80 ? 'bg-amber-500' : 'bg-green-500';
+
+  // If tech is off, show simplified column
+  if (timeOff) {
+    return (
+      <div className="flex-1 min-w-[180px] bg-gray-100 rounded-lg shadow-sm border border-gray-200 flex flex-col opacity-60">
+        {/* Header */}
+        <div 
+          className="p-3 border-b border-gray-200 rounded-t-lg flex-shrink-0"
+          style={{ backgroundColor: tech.color ? `${tech.color}15` : '#f9fafb' }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-gray-500">{tech.name}</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-200 text-gray-500">
+              OFF
+            </span>
+          </div>
+        </div>
+        
+        {/* Time Off Message */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
+          <span className="text-3xl mb-2">🏖️</span>
+          <span className="text-sm font-medium text-gray-500">
+            Time Off
+          </span>
+          {timeOff.reason && (
+            <span className="text-xs text-gray-400 mt-1">{timeOff.reason}</span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
