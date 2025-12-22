@@ -53,6 +53,7 @@ export function BookingModal({
   const [searching, setSearching] = useState(false);
   const [customer, setCustomer] = useState(null);
   const [customerLoading, setCustomerLoading] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(null); // For new customer form
 
   // Vehicle state
   const [vehicles, setVehicles] = useState([]);
@@ -80,6 +81,7 @@ export function BookingModal({
       setSearchTerm('');
       setSearchResults([]);
       setCustomer(null);
+      setNewCustomer(null);
       setVehicles([]);
       setSelectedVehicle(null);
       setVehicleHistory(null);
@@ -168,10 +170,34 @@ export function BookingModal({
 
   const handleClearCustomer = () => {
     setCustomer(null);
+    setNewCustomer(null);
     setVehicles([]);
     setSelectedVehicle(null);
     setVehicleHistory(null);
     setQuoteItems([]);
+  };
+
+  const handleAddNewCustomer = () => {
+    setNewCustomer({
+      isNew: true,
+      first_name: '',
+      last_name: '',
+      company_name: '',
+      primary_phone: '',
+      secondary_phone: '',
+      email: '',
+      street: '',
+      city: '',
+      state: 'AB',
+      zip: '',
+      notes: ''
+    });
+    setSearchTerm('');
+    setSearchResults([]);
+  };
+
+  const handleCancelNewCustomer = () => {
+    setNewCustomer(null);
   };
 
   // ============================================
@@ -285,10 +311,26 @@ export function BookingModal({
   // ============================================
 
   const handleSave = async () => {
-    if (!customer) {
-      alert('Please select a customer');
+    // Determine which customer data to use
+    const customerData = newCustomer?.isNew ? newCustomer : customer;
+    
+    if (!customerData) {
+      alert('Please select or create a customer');
       return;
     }
+    
+    // Validate new customer
+    if (newCustomer?.isNew) {
+      if (!newCustomer.first_name?.trim() || !newCustomer.last_name?.trim()) {
+        alert('Please enter customer first and last name');
+        return;
+      }
+      if (!newCustomer.primary_phone?.trim()) {
+        alert('Please enter customer phone number');
+        return;
+      }
+    }
+    
     if (!selectedVehicle) {
       alert('Please select a vehicle');
       return;
@@ -300,6 +342,59 @@ export function BookingModal({
 
     setSaving(true);
 
+    let finalCustomer = customerData;
+    
+    // Create new customer if needed
+    if (newCustomer?.isNew) {
+      try {
+        const file_as = newCustomer.company_name?.trim() 
+          ? newCustomer.company_name 
+          : `${newCustomer.last_name}, ${newCustomer.first_name}`;
+        
+        const newCustomerPayload = {
+          file_as,
+          first_name: newCustomer.first_name?.trim() || null,
+          last_name: newCustomer.last_name?.trim() || null,
+          company_name: newCustomer.company_name?.trim() || null,
+          primary_phone: newCustomer.primary_phone?.trim() || null,
+          secondary_phone: newCustomer.secondary_phone?.trim() || null,
+          email: newCustomer.email?.trim() || null,
+          street: newCustomer.street?.trim() || null,
+          city: newCustomer.city?.trim() || null,
+          state: newCustomer.state?.trim() || 'AB',
+          zip: newCustomer.zip?.trim() || null,
+          country: 'Canada',
+          notes: newCustomer.notes?.trim() || null,
+          customer_since: new Date().toISOString().split('T')[0]
+        };
+        
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/contacts`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(newCustomerPayload)
+        });
+        
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(`Failed to create customer: ${err}`);
+        }
+        
+        const [createdCustomer] = await res.json();
+        finalCustomer = { ...newCustomerPayload, ...createdCustomer };
+        console.log('Created new customer:', finalCustomer);
+      } catch (err) {
+        console.error('Failed to create customer:', err);
+        alert('Failed to create customer: ' + err.message);
+        setSaving(false);
+        return;
+      }
+    }
+
     // Build vehicle description
     const vehicleDesc = [selectedVehicle.year, selectedVehicle.make, selectedVehicle.model]
       .filter(Boolean).join(' ');
@@ -308,39 +403,39 @@ export function BookingModal({
       // ============================================
       // CUSTOMER FIELDS - CORE
       // ============================================
-      customer_id: customer.id || null,
-      customer_name: customer.file_as || null,
-      customer_phone: customer.primary_phone || null,
-      customer_phone_secondary: customer.secondary_phone || null,
-      customer_email: customer.email || null,
-      company_name: customer.company_name || null,
-      protractor_contact_id: customer.protractor_contact_id || null,
+      customer_id: finalCustomer.id || null,
+      customer_name: finalCustomer.file_as || null,
+      customer_phone: finalCustomer.primary_phone || null,
+      customer_phone_secondary: finalCustomer.secondary_phone || null,
+      customer_email: finalCustomer.email || null,
+      company_name: finalCustomer.company_name || null,
+      protractor_contact_id: finalCustomer.protractor_contact_id || null,
       
       // ============================================
       // CUSTOMER FIELDS - EXTENDED
       // ============================================
-      customer_first_name: customer.first_name || null,
-      customer_last_name: customer.last_name || null,
-      customer_street: customer.street || null,
-      customer_city: customer.city || null,
-      customer_state: customer.state || null,
-      customer_zip: customer.zip || null,
-      customer_country: customer.country || null,
+      customer_first_name: finalCustomer.first_name || null,
+      customer_last_name: finalCustomer.last_name || null,
+      customer_street: finalCustomer.street || null,
+      customer_city: finalCustomer.city || null,
+      customer_state: finalCustomer.state || null,
+      customer_zip: finalCustomer.zip || null,
+      customer_country: finalCustomer.country || null,
       
       // Full address as single field too
-      customer_address: [customer.street, customer.city, customer.state, customer.zip]
+      customer_address: [finalCustomer.street, finalCustomer.city, finalCustomer.state, finalCustomer.zip]
         .filter(Boolean).join(', ') || null,
       
       // ============================================
       // CUSTOMER STATS
       // ============================================
-      customer_since: customer.customer_since || null,
-      customer_lifetime_visits: customer.lifetime_visits || null,
-      customer_lifetime_spent: customer.lifetime_spent || null,
-      customer_avg_visit_value: customer.avg_visit_value || null,
-      customer_last_visit_date: customer.last_visit_date || null,
-      customer_days_since_visit: customer.days_since_visit || null,
-      customer_is_supplier: customer.is_supplier || false,
+      customer_since: finalCustomer.customer_since || null,
+      customer_lifetime_visits: finalCustomer.lifetime_visits || null,
+      customer_lifetime_spent: finalCustomer.lifetime_spent || null,
+      customer_avg_visit_value: finalCustomer.avg_visit_value || null,
+      customer_last_visit_date: finalCustomer.last_visit_date || null,
+      customer_days_since_visit: finalCustomer.days_since_visit || null,
+      customer_is_supplier: finalCustomer.is_supplier || false,
       
       // ============================================
       // VEHICLE FIELDS - CORE
@@ -366,7 +461,7 @@ export function BookingModal({
       // ============================================
       // CHANGE TRACKING
       // ============================================
-      is_new_customer: false,
+      is_new_customer: newCustomer?.isNew || false,
       is_new_vehicle: selectedVehicle.isNew || false,
       
       // ============================================
@@ -452,6 +547,8 @@ export function BookingModal({
         <div className="flex-1 grid grid-cols-4 gap-0 overflow-hidden">
           <Panel1Customer
             customer={customer}
+            newCustomer={newCustomer}
+            onNewCustomerChange={setNewCustomer}
             searchTerm={searchTerm}
             searchResults={searchResults}
             searching={searching}
@@ -464,11 +561,8 @@ export function BookingModal({
               console.log('Update customer:', customer?.id);
               alert('Update customer feature - coming soon');
             }}
-            onAddNewCustomer={() => {
-              // TODO: Open new customer form
-              console.log('Add new customer');
-              alert('Add new customer feature - coming soon');
-            }}
+            onAddNewCustomer={handleAddNewCustomer}
+            onCancelNewCustomer={handleCancelNewCustomer}
           />
 
           <Panel2Vehicles
@@ -480,7 +574,7 @@ export function BookingModal({
             onAddNewVehicle={handleAddNewVehicle}
             searchTerm={vehicleSearchTerm}
             onSearch={setVehicleSearchTerm}
-            disabled={!customer}
+            disabled={!customer && !newCustomer}
           />
 
           <Panel3HistoryServices
@@ -520,6 +614,8 @@ export function BookingModal({
 
 function Panel1Customer({
   customer,
+  newCustomer,
+  onNewCustomerChange,
   searchTerm,
   searchResults,
   searching,
@@ -528,7 +624,8 @@ function Panel1Customer({
   onSelectCustomer,
   onClearCustomer,
   onUpdateCustomer,
-  onAddNewCustomer
+  onAddNewCustomer,
+  onCancelNewCustomer
 }) {
   if (loading) {
     return (
@@ -537,6 +634,135 @@ function Panel1Customer({
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
           <p>Loading customer...</p>
         </div>
+      </div>
+    );
+  }
+
+  // New Customer Form
+  if (newCustomer?.isNew) {
+    return (
+      <div className="border-r border-gray-200 flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-gray-200 bg-green-50 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-green-700">New Customer</span>
+            <button
+              onClick={onCancelNewCustomer}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              ← Cancel
+            </button>
+          </div>
+          
+          {/* Name Row */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="First Name *"
+              value={newCustomer.first_name || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, first_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Last Name *"
+              value={newCustomer.last_name || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, last_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Company */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Company (optional)"
+              value={newCustomer.company_name || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, company_name: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Phones */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="tel"
+              placeholder="Phone *"
+              value={newCustomer.primary_phone || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, primary_phone: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="tel"
+              placeholder="Alt Phone"
+              value={newCustomer.secondary_phone || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, secondary_phone: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Email */}
+          <div className="mb-2">
+            <input
+              type="email"
+              placeholder="Email"
+              value={newCustomer.email || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, email: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Address */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Street Address"
+              value={newCustomer.street || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, street: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* City, Province, Postal */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="City"
+              value={newCustomer.city || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, city: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Prov"
+              value={newCustomer.state || 'AB'}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, state: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Postal"
+              value={newCustomer.zip || ''}
+              onChange={(e) => onNewCustomerChange({ ...newCustomer, zip: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          
+          {/* Notes */}
+          <textarea
+            placeholder="Notes (optional)"
+            value={newCustomer.notes || ''}
+            onChange={(e) => onNewCustomerChange({ ...newCustomer, notes: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm h-16 resize-none"
+          />
+        </div>
+        
+        {/* Validation hint */}
+        <div className="p-3 text-xs text-gray-500">
+          <p>* Required fields: First Name, Last Name, Phone</p>
+          <p className="mt-1 text-green-600">Customer will be saved when you book the appointment.</p>
+        </div>
+        
+        <div className="flex-1 bg-gray-50" />
       </div>
     );
   }
