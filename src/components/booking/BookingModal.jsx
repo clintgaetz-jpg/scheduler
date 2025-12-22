@@ -192,7 +192,11 @@ export function BookingModal({
       city: '',
       state: 'AB',
       zip: '',
-      notes: ''
+      country: 'Canada',
+      notes: '',
+      prefers_call: true,
+      prefers_text: true,
+      prefers_email: true
     });
     setSearchTerm('');
     setSearchResults([]);
@@ -366,8 +370,8 @@ export function BookingModal({
 
     setSaving(true);
 
-    // Build file_as for new customers
-    const file_as = newCustomer?.isNew 
+    // Build customer name for new customers
+    const customerName = newCustomer?.isNew 
       ? (newCustomer.company_name?.trim() || `${newCustomer.last_name}, ${newCustomer.first_name}`)
       : customerData.file_as;
 
@@ -375,20 +379,28 @@ export function BookingModal({
     const vehicleDesc = [selectedVehicle.year, selectedVehicle.make, selectedVehicle.model]
       .filter(Boolean).join(' ');
 
+    // Map to APPOINTMENTS-TABLE-SCHEMA.md columns
     const appointmentData = {
       // ============================================
-      // CUSTOMER FIELDS - CORE
+      // CORE IDENTIFIERS
       // ============================================
-      customer_id: customerData.id || null,  // null for new customers
-      customer_name: file_as || null,
+      source: 'manual',
+
+      // ============================================
+      // CUSTOMER INFO
+      // ============================================
+      customer_id: customerData.id || null,
+      customer_name: customerName || null,
       customer_phone: customerData.primary_phone || null,
       customer_phone_secondary: customerData.secondary_phone || null,
       customer_email: customerData.email || null,
+      customer_address: [customerData.street, customerData.city, customerData.state, customerData.zip]
+        .filter(Boolean).join(', ') || null,
       company_name: customerData.company_name || null,
       protractor_contact_id: customerData.protractor_contact_id || null,
-      
+
       // ============================================
-      // CUSTOMER FIELDS - EXTENDED
+      // EXTENDED CUSTOMER FIELDS
       // ============================================
       customer_first_name: customerData.first_name || null,
       customer_last_name: customerData.last_name || null,
@@ -397,83 +409,74 @@ export function BookingModal({
       customer_state: customerData.state || null,
       customer_zip: customerData.zip || null,
       customer_country: customerData.country || 'Canada',
-      
-      // Full address as single field too
-      customer_address: [customerData.street, customerData.city, customerData.state, customerData.zip]
-        .filter(Boolean).join(', ') || null,
-      
-      // ============================================
-      // CUSTOMER STATS (null for new customers)
-      // ============================================
       customer_since: customerData.customer_since || null,
       customer_lifetime_visits: customerData.lifetime_visits || null,
       customer_lifetime_spent: customerData.lifetime_spent || null,
       customer_avg_visit_value: customerData.avg_visit_value || null,
       customer_last_visit_date: customerData.last_visit_date || null,
       customer_days_since_visit: customerData.days_since_visit || null,
-      customer_is_supplier: customerData.is_supplier || false,
-      
+
       // ============================================
-      // VEHICLE FIELDS - CORE
+      // CUSTOMER PREFERENCES
+      // ============================================
+      customer_prefers_call: customerData.prefers_call !== false,
+      customer_prefers_text: customerData.prefers_text !== false,
+      customer_prefers_email: customerData.prefers_email !== false,
+      customer_is_supplier: customerData.is_supplier || false,
+
+      // ============================================
+      // CUSTOMER FLAGS
+      // ============================================
+      is_new_customer: newCustomer?.isNew || false,
+      is_repeat_customer: !newCustomer?.isNew && !!customerData.id,
+
+      // ============================================
+      // VEHICLE INFO
       // ============================================
       vehicle_id: selectedVehicle.vehicle_id || null,
+      vehicle_description: vehicleDesc || null,
       vehicle_vin: selectedVehicle.vin || null,
-      vehicle_plate: selectedVehicle.plate || null,
-      vehicle_mileage: selectedVehicle.mileage || selectedVehicle.last_mileage || null,
-      unit_number: selectedVehicle.unit_number || null,
-      
-      // ============================================
-      // VEHICLE FIELDS - EXTENDED
-      // ============================================
-      vehicle_year: selectedVehicle.year || null,
+      vehicle_year: selectedVehicle.year ? parseInt(selectedVehicle.year) : null,
       vehicle_make: selectedVehicle.make || null,
       vehicle_model: selectedVehicle.model || null,
       vehicle_submodel: selectedVehicle.submodel || null,
       vehicle_engine: selectedVehicle.engine || null,
       vehicle_color: selectedVehicle.color || null,
-      vehicle_description: vehicleDesc || null,
+      vehicle_plate: selectedVehicle.plate || null,
+      vehicle_mileage: selectedVehicle.mileage || selectedVehicle.last_mileage || null,
       vehicle_mileage_estimated: selectedVehicle.estimated_current_mileage || null,
-      
-      // ============================================
-      // CHANGE TRACKING
-      // ============================================
-      is_new_customer: newCustomer?.isNew || false,
+      vehicle_unit_number: selectedVehicle.unit_number || null,
       is_new_vehicle: selectedVehicle.isNew || false,
-      is_customer_updated: customerData._wasEdited || false,
-      
+
       // ============================================
       // SCHEDULING
       // ============================================
       scheduled_date: formData.is_on_hold ? null : formData.scheduled_date,
-      time_slot: 'anytime',
-      tech_id: formData.is_on_hold ? null : formData.tech_id || null,
+      tech_id: formData.is_on_hold ? null : (formData.tech_id || null),
       estimated_hours: totalHours || 1,
-      
+      service_category: quoteItems[0]?.category || null,
+
       // ============================================
-      // HOLD STATUS
+      // WORK DETAILS
+      // ============================================
+      services: quoteItems,
+      estimated_total: estimatedTotal,
+      notes: formData.notes || null,
+
+      // ============================================
+      // STATUS
+      // ============================================
+      status: formData.is_on_hold ? 'hold' : 'scheduled',
+
+      // ============================================
+      // HOLD TRACKING
       // ============================================
       is_on_hold: formData.is_on_hold || false,
       hold_reason: formData.is_on_hold ? 'scheduling' : null,
-      hold_notes: null,
-      hold_at: formData.is_on_hold ? new Date().toISOString() : null,
-      
-      // ============================================
-      // STATUS & SERVICES
-      // ============================================
-      status: formData.is_on_hold ? 'hold' : 'scheduled',
-      service_category: quoteItems[0]?.category || 'general',
-      services: quoteItems,
-      estimated_total: estimatedTotal,
-      
-      // ============================================
-      // NOTES & META
-      // ============================================
-      notes: formData.notes || null,
-      customer_request: null,
-      source: 'manual',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      hold_at: formData.is_on_hold ? new Date().toISOString() : null
     };
+
+    console.log('Saving appointment:', appointmentData);
 
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments`, {
@@ -489,16 +492,25 @@ export function BookingModal({
       
       const result = await res.json();
       
+      if (!res.ok) {
+        // Supabase error response
+        console.error('Save failed:', result);
+        const errorMsg = result.message || result.error || JSON.stringify(result);
+        alert(`Failed to save appointment:\n${errorMsg}`);
+        setSaving(false);
+        return;
+      }
+      
       if (Array.isArray(result) && result.length > 0) {
         onSave && onSave(result[0]);
         onClose();
       } else {
-        console.error('Save failed:', result);
-        alert('Failed to save appointment');
+        console.error('Save failed - unexpected response:', result);
+        alert('Failed to save appointment - unexpected response');
       }
     } catch (err) {
       console.error('Save error:', err);
-      alert('Failed to save appointment');
+      alert(`Failed to save appointment:\n${err.message}`);
     }
     
     setSaving(false);
@@ -735,6 +747,37 @@ function Panel1Customer({
               className="border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
           </div>
+          
+          {/* Contact Preferences */}
+          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingCustomer.prefers_call !== false}
+                onChange={(e) => onEditingCustomerChange({ ...editingCustomer, prefers_call: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Phone size={10} /> Call
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingCustomer.prefers_text !== false}
+                onChange={(e) => onEditingCustomerChange({ ...editingCustomer, prefers_text: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <MessageSquare size={10} /> Text
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingCustomer.prefers_email !== false}
+                onChange={(e) => onEditingCustomerChange({ ...editingCustomer, prefers_email: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Mail size={10} /> Email
+            </label>
+          </div>
         </div>
         
         {/* Info hint */}
@@ -862,8 +905,39 @@ function Panel1Customer({
             placeholder="Notes (optional)"
             value={newCustomer.notes || ''}
             onChange={(e) => onNewCustomerChange({ ...newCustomer, notes: e.target.value })}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm h-16 resize-none"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm h-12 resize-none"
           />
+          
+          {/* Contact Preferences */}
+          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newCustomer.prefers_call !== false}
+                onChange={(e) => onNewCustomerChange({ ...newCustomer, prefers_call: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Phone size={10} /> Call
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newCustomer.prefers_text !== false}
+                onChange={(e) => onNewCustomerChange({ ...newCustomer, prefers_text: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <MessageSquare size={10} /> Text
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newCustomer.prefers_email !== false}
+                onChange={(e) => onNewCustomerChange({ ...newCustomer, prefers_email: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Mail size={10} /> Email
+            </label>
+          </div>
         </div>
         
         {/* Validation hint */}
