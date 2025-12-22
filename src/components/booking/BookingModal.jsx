@@ -300,31 +300,107 @@ export function BookingModal({
 
     setSaving(true);
 
+    // Build vehicle description
+    const vehicleDesc = [selectedVehicle.year, selectedVehicle.make, selectedVehicle.model]
+      .filter(Boolean).join(' ');
+
     const appointmentData = {
-      customer_id: customer.id,
-      customer_name: customer.file_as,
-      customer_phone: customer.primary_phone,
-      customer_email: customer.email,
-      company_name: customer.company_name,
-      vehicle_id: selectedVehicle.vehicle_id,
-      vehicle_vin: selectedVehicle.vin,
-      vehicle_year: selectedVehicle.year,
-      vehicle_make: selectedVehicle.make,
-      vehicle_model: selectedVehicle.model,
-      vehicle_plate: selectedVehicle.plate,
-      vehicle_color: selectedVehicle.color,
-      vehicle_description: `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}`,
-      vehicle_mileage: selectedVehicle.last_mileage,
+      // ============================================
+      // CUSTOMER FIELDS - CORE
+      // ============================================
+      customer_id: customer.id || null,
+      customer_name: customer.file_as || null,
+      customer_phone: customer.primary_phone || null,
+      customer_phone_secondary: customer.secondary_phone || null,
+      customer_email: customer.email || null,
+      company_name: customer.company_name || null,
+      protractor_contact_id: customer.protractor_contact_id || null,
+      
+      // ============================================
+      // CUSTOMER FIELDS - EXTENDED
+      // ============================================
+      customer_first_name: customer.first_name || null,
+      customer_last_name: customer.last_name || null,
+      customer_street: customer.street || null,
+      customer_city: customer.city || null,
+      customer_state: customer.state || null,
+      customer_zip: customer.zip || null,
+      customer_country: customer.country || null,
+      
+      // Full address as single field too
+      customer_address: [customer.street, customer.city, customer.state, customer.zip]
+        .filter(Boolean).join(', ') || null,
+      
+      // ============================================
+      // CUSTOMER STATS
+      // ============================================
+      customer_since: customer.customer_since || null,
+      customer_lifetime_visits: customer.lifetime_visits || null,
+      customer_lifetime_spent: customer.lifetime_spent || null,
+      customer_avg_visit_value: customer.avg_visit_value || null,
+      customer_last_visit_date: customer.last_visit_date || null,
+      customer_days_since_visit: customer.days_since_visit || null,
+      customer_is_supplier: customer.is_supplier || false,
+      
+      // ============================================
+      // VEHICLE FIELDS - CORE
+      // ============================================
+      vehicle_id: selectedVehicle.vehicle_id || null,
+      vehicle_vin: selectedVehicle.vin || null,
+      vehicle_plate: selectedVehicle.plate || null,
+      vehicle_mileage: selectedVehicle.mileage || selectedVehicle.last_mileage || null,
+      unit_number: selectedVehicle.unit_number || null,
+      
+      // ============================================
+      // VEHICLE FIELDS - EXTENDED
+      // ============================================
+      vehicle_year: selectedVehicle.year || null,
+      vehicle_make: selectedVehicle.make || null,
+      vehicle_model: selectedVehicle.model || null,
+      vehicle_submodel: selectedVehicle.submodel || null,
+      vehicle_engine: selectedVehicle.engine || null,
+      vehicle_color: selectedVehicle.color || null,
+      vehicle_description: vehicleDesc || null,
+      vehicle_mileage_estimated: selectedVehicle.estimated_current_mileage || null,
+      
+      // ============================================
+      // CHANGE TRACKING
+      // ============================================
+      is_new_customer: false,
+      is_new_vehicle: selectedVehicle.isNew || false,
+      
+      // ============================================
+      // SCHEDULING
+      // ============================================
       scheduled_date: formData.is_on_hold ? null : formData.scheduled_date,
-      tech_id: formData.is_on_hold ? null : formData.tech_id,
+      time_slot: 'anytime',
+      tech_id: formData.is_on_hold ? null : formData.tech_id || null,
       estimated_hours: totalHours || 1,
-      is_on_hold: formData.is_on_hold,
+      
+      // ============================================
+      // HOLD STATUS
+      // ============================================
+      is_on_hold: formData.is_on_hold || false,
       hold_reason: formData.is_on_hold ? 'scheduling' : null,
+      hold_notes: null,
+      hold_at: formData.is_on_hold ? new Date().toISOString() : null,
+      
+      // ============================================
+      // STATUS & SERVICES
+      // ============================================
+      status: formData.is_on_hold ? 'hold' : 'scheduled',
+      service_category: quoteItems[0]?.category || 'general',
       services: quoteItems,
       estimated_total: estimatedTotal,
-      notes: formData.notes,
-      status: formData.is_on_hold ? 'hold' : 'scheduled',
-      source: 'manual'
+      
+      // ============================================
+      // NOTES & META
+      // ============================================
+      notes: formData.notes || null,
+      customer_request: null,
+      source: 'manual',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     try {
@@ -681,14 +757,15 @@ function Panel2Vehicles({
         </div>
       )}
 
-      {/* New Vehicle Form */}
+      {/* New Vehicle Form - EXPANDED */}
       {selectedVehicle?.isNew && (
         <div className="p-3 border-b border-gray-200 bg-green-50 flex-shrink-0">
           <div className="text-xs font-medium text-green-700 mb-2">New Vehicle</div>
+          {/* Row 1: Year, Make, Model */}
           <div className="grid grid-cols-3 gap-2 mb-2">
             <input
               type="text"
-              placeholder="Year"
+              placeholder="Year *"
               maxLength={4}
               value={selectedVehicle.year || ''}
               onChange={(e) => onSelectVehicle({ ...selectedVehicle, year: e.target.value })}
@@ -696,20 +773,48 @@ function Panel2Vehicles({
             />
             <input
               type="text"
-              placeholder="Make"
+              placeholder="Make *"
               value={selectedVehicle.make || ''}
               onChange={(e) => onSelectVehicle({ ...selectedVehicle, make: e.target.value })}
               className="border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
             <input
               type="text"
-              placeholder="Model"
+              placeholder="Model *"
               value={selectedVehicle.model || ''}
               onChange={(e) => onSelectVehicle({ ...selectedVehicle, model: e.target.value })}
               className="border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          {/* Row 2: Submodel, Color */}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Submodel (LT, XLT...)"
+              value={selectedVehicle.submodel || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, submodel: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Color"
+              value={selectedVehicle.color || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, color: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          {/* Row 3: Engine */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Engine (5.3L V8, 2.0L Turbo...)"
+              value={selectedVehicle.engine || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, engine: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          {/* Row 4: Plate, Unit#, Mileage */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
             <input
               type="text"
               placeholder="Plate"
@@ -719,16 +824,33 @@ function Panel2Vehicles({
             />
             <input
               type="text"
-              placeholder="VIN"
+              placeholder="Unit #"
+              value={selectedVehicle.unit_number || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, unit_number: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="number"
+              placeholder="Mileage"
+              value={selectedVehicle.mileage || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, mileage: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          {/* Row 5: VIN (full width) */}
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="VIN (17 characters)"
               maxLength={17}
               value={selectedVehicle.vin || ''}
               onChange={(e) => onSelectVehicle({ ...selectedVehicle, vin: e.target.value.toUpperCase() })}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
             />
           </div>
           <button
             onClick={onChangeVehicle}
-            className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+            className="text-xs text-gray-500 hover:text-gray-700"
           >
             ← Cancel
           </button>
