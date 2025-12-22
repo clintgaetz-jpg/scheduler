@@ -1135,7 +1135,6 @@ function Panel3HistoryServices({
       console.error('History filter error:', e);
       return [];
     }
-    }
   }, [vehicleHistory, historySearch]);
 
   if (disabled) {
