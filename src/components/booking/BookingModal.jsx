@@ -459,6 +459,16 @@ export function BookingModal({
             onSearch={handleSearch}
             onSelectCustomer={handleSelectCustomer}
             onClearCustomer={handleClearCustomer}
+            onUpdateCustomer={() => {
+              // TODO: Open customer edit modal/form
+              console.log('Update customer:', customer?.id);
+              alert('Update customer feature - coming soon');
+            }}
+            onAddNewCustomer={() => {
+              // TODO: Open new customer form
+              console.log('Add new customer');
+              alert('Add new customer feature - coming soon');
+            }}
           />
 
           <Panel2Vehicles
@@ -516,7 +526,9 @@ function Panel1Customer({
   loading,
   onSearch,
   onSelectCustomer,
-  onClearCustomer
+  onClearCustomer,
+  onUpdateCustomer,
+  onAddNewCustomer
 }) {
   if (loading) {
     return (
@@ -532,9 +544,18 @@ function Panel1Customer({
   if (!customer) {
     return (
       <div className="border-r border-gray-200 p-4 flex flex-col">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Search Customer
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Search Customer
+          </label>
+          <button
+            onClick={onAddNewCustomer}
+            className="px-2 py-0.5 text-xs bg-green-600 text-white rounded-full hover:bg-green-700 flex items-center gap-1"
+          >
+            <Plus size={12} />
+            New Customer
+          </button>
+        </div>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -574,7 +595,10 @@ function Panel1Customer({
           <div className="mt-4 text-center text-gray-500 py-8">
             <User size={32} className="mx-auto mb-2 opacity-30" />
             <p>No customers found</p>
-            <button className="mt-2 text-blue-600 text-sm hover:underline">
+            <button 
+              onClick={onAddNewCustomer}
+              className="mt-2 text-blue-600 text-sm hover:underline"
+            >
               + Add New Customer
             </button>
           </div>
@@ -592,6 +616,14 @@ function Panel1Customer({
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-gray-900 text-lg">{customer.file_as}</h3>
+              <button
+                onClick={onUpdateCustomer}
+                className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded hover:bg-amber-200 flex items-center gap-1"
+                title="Update customer info"
+              >
+                <Edit size={10} />
+                Update
+              </button>
               <button
                 onClick={onClearCustomer}
                 className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
