@@ -170,7 +170,7 @@ export function BookingModal({
         result = await bookAppointment(apptData);
       }
 
-      console.log('Booking result:', result);
+    
 
       if (onSave) onSave(result);
       onClose();
