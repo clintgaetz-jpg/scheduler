@@ -915,15 +915,22 @@ function Panel2Vehicles({
 }
 
 // ============================================
-// VEHICLE CARD - NO EXPANDED ITEMS IN WO LIST
+// VEHICLE CARD - WITH EXPANDABLE INVOICE LINES
 // ============================================
 
 function VehicleCard({ vehicle, isSelected, onSelect }) {
+  const [expandedWO, setExpandedWO] = useState(null);
+
   const getStatusIcon = () => {
     const status = vehicle.service_status;
     if (status === 'overdue') return <span className="text-red-500">🔴</span>;
     if (status === 'due_soon') return <span className="text-amber-500">🟡</span>;
     return <span className="text-green-500">🟢</span>;
+  };
+
+  const toggleExpand = (woNumber, e) => {
+    e.stopPropagation();
+    setExpandedWO(expandedWO === woNumber ? null : woNumber);
   };
 
   return (
@@ -970,28 +977,60 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
               )}
             </span>
           )}
-          {vehicle.days_since_service !== null && (
+          {vehicle.days_since_service != null && (
             <span className="ml-2">
               • {vehicle.days_since_service === 0 ? 'Today' : `${vehicle.days_since_service}d ago`}
             </span>
           )}
         </div>
 
-        {/* Last 3 Invoices - SIMPLE BARS, NO EXPAND */}
+        {/* Last 3 Invoices - EXPANDABLE */}
         {vehicle.last_3_invoices?.length > 0 && (
           <div className="mt-2 border-t border-gray-100 pt-1 space-y-0.5">
-            {vehicle.last_3_invoices.slice(0, 3).map((inv, i) => (
-              <div key={i} className="flex items-center justify-between text-xs py-0.5 px-1 bg-gray-50 rounded">
-                <span className="text-gray-500">{inv.invoice_date}</span>
-                <span className="font-medium">WO# {inv.workorder_number}</span>
-                <span className="font-medium">${inv.grand_total?.toFixed(0)}</span>
-              </div>
-            ))}
-            {vehicle.last_3_invoices.some(inv => inv.deferred?.length > 0) && (
-              <div className="text-xs text-amber-600 pl-1">
-                ⚠️ Has deferred work
-              </div>
-            )}
+            {vehicle.last_3_invoices.slice(0, 3).map((inv, i) => {
+              const isExpanded = expandedWO === inv.workorder_number;
+              const hasDeferred = inv.deferred?.length > 0;
+              const completed = inv.completed_packages || [];
+              const deferred = inv.deferred || inv.deferred_packages || [];
+              
+              return (
+                <div key={i}>
+                  {/* Invoice Header - Clickable */}
+                  <div 
+                    onClick={(e) => toggleExpand(inv.workorder_number, e)}
+                    className="flex items-center gap-1 text-xs py-0.5 px-1 bg-gray-50 rounded cursor-pointer hover:bg-gray-100"
+                  >
+                    <ChevronRight 
+                      size={10} 
+                      className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} 
+                    />
+                    <span className="text-gray-500">{inv.invoice_date}</span>
+                    <span className="font-medium">WO# {inv.workorder_number}</span>
+                    <span className="ml-auto font-medium">${inv.grand_total?.toFixed(0)}</span>
+                    {hasDeferred && <span className="text-amber-500 ml-1">⚠️</span>}
+                  </div>
+                  
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <div className="ml-3 pl-2 border-l border-gray-200 mt-1 mb-1 space-y-0.5">
+                      {completed.slice(0, 5).map((pkg, j) => (
+                        <div key={j} className="text-xs text-gray-600 truncate">
+                          ✓ {pkg.title}
+                        </div>
+                      ))}
+                      {completed.length > 5 && (
+                        <div className="text-xs text-gray-400">+{completed.length - 5} more</div>
+                      )}
+                      {deferred.filter(d => !d.is_header).map((pkg, j) => (
+                        <div key={`d${j}`} className="text-xs text-amber-600 truncate">
+                          ⚠️ {pkg.title} - ${pkg.total?.toFixed(0)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1000,7 +1039,7 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
 }
 
 // ============================================
-// PANEL 3: HISTORY & SERVICES - FIXED SEARCH & TRUNCATION
+// PANEL 3: HISTORY & SERVICES - FIXED
 // ============================================
 
 function Panel3HistoryServices({
@@ -1013,48 +1052,73 @@ function Panel3HistoryServices({
   const [activeTab, setActiveTab] = useState('services');
   const [historySearch, setHistorySearch] = useState('');
   const [expandedInvoices, setExpandedInvoices] = useState({});
-  const [collapsedCategories, setCollapsedCategories] = useState({});
+  const [collapsedCategories, setCollapsedCategories] = useState(() => {
+    // Initialize with all categories collapsed except favorites
+    return {};
+  });
 
   // Group packages: favorites first, then by category
   const groupedPackages = useMemo(() => {
-    const favorites = [];
-    const byCategory = {};
+    const result = { favorites: [] };
     
-    (servicePackages || []).forEach(pkg => {
+    if (!servicePackages || !Array.isArray(servicePackages)) {
+      return result;
+    }
+    
+    servicePackages.forEach(pkg => {
       if (pkg.is_favorite) {
-        favorites.push(pkg);
-      } else {
-        const cat = pkg.category || 'other';
-        if (!byCategory[cat]) byCategory[cat] = [];
-        byCategory[cat].push(pkg);
+        result.favorites.push(pkg);
+      }
+      // Also add to category (favorites appear in both)
+      const cat = pkg.category || 'other';
+      if (!result[cat]) result[cat] = [];
+      if (!pkg.is_favorite) {
+        result[cat].push(pkg);
       }
     });
     
-    return { favorites, ...byCategory };
+    return result;
   }, [servicePackages]);
 
-  // Initialize collapsed state - favorites open, rest closed
+  // Set initial collapsed state when packages load
   useEffect(() => {
-    const initial = {};
-    Object.keys(groupedPackages).forEach(cat => {
-      initial[cat] = cat !== 'favorites';
-    });
-    setCollapsedCategories(initial);
-  }, [servicePackages]); // Only on servicePackages change, not groupedPackages
+    if (servicePackages && servicePackages.length > 0) {
+      const initial = {};
+      Object.keys(groupedPackages).forEach(cat => {
+        // Favorites open, everything else collapsed
+        initial[cat] = cat !== 'favorites';
+      });
+      setCollapsedCategories(initial);
+    }
+  }, [servicePackages?.length]); // Only trigger on length change
 
-  // Filter history - SAFELY handle null/undefined
+  // Filter history - SAFELY handle null/undefined with try-catch
   const filteredInvoices = useMemo(() => {
-    const invoices = vehicleHistory?.invoices || [];
-    if (!historySearch || !historySearch.trim()) return invoices;
-    
-    const term = historySearch.toLowerCase().trim();
-    return invoices.filter(inv => {
-      if (inv.workorder_number?.toLowerCase().includes(term)) return true;
-      if (inv.completed_packages?.some(p => p.title?.toLowerCase().includes(term))) return true;
-      if (inv.deferred_packages?.some(p => p.title?.toLowerCase().includes(term))) return true;
-      return false;
-    });
-  }, [vehicleHistory?.invoices, historySearch]);
+    try {
+      const invoices = vehicleHistory?.invoices;
+      if (!invoices || !Array.isArray(invoices)) return [];
+      if (!historySearch || historySearch.trim() === '') return invoices;
+      
+      const term = historySearch.toLowerCase().trim();
+      return invoices.filter(inv => {
+        try {
+          if (inv.workorder_number && inv.workorder_number.toLowerCase().includes(term)) return true;
+          if (inv.completed_packages && Array.isArray(inv.completed_packages)) {
+            if (inv.completed_packages.some(p => p.title && p.title.toLowerCase().includes(term))) return true;
+          }
+          if (inv.deferred_packages && Array.isArray(inv.deferred_packages)) {
+            if (inv.deferred_packages.some(p => p.title && p.title.toLowerCase().includes(term))) return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
+      });
+    } catch (e) {
+      console.error('History filter error:', e);
+      return [];
+    }
+  }, [vehicleHistory, historySearch]);
 
   if (disabled) {
     return (
@@ -1120,54 +1184,92 @@ function Panel3HistoryServices({
           {/* Add Generic Service */}
           <GenericServiceAdder onAddToQuote={onAddToQuote} />
 
-          {/* Grouped Packages */}
+          {/* Grouped Packages - Favorites FIRST, then alphabetical */}
           <div className="p-2 space-y-1">
-            {Object.entries(groupedPackages).map(([category, pkgs]) => {
-              if (!pkgs || pkgs.length === 0) return null;
-              const isCollapsed = collapsedCategories[category];
-              const isFavorites = category === 'favorites';
+            {/* Render favorites first if they exist */}
+            {groupedPackages.favorites && groupedPackages.favorites.length > 0 && (
+              <div>
+                <button
+                  onClick={() => toggleCategory('favorites')}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium uppercase rounded bg-amber-100 text-amber-800"
+                >
+                  <span className="flex items-center gap-1">
+                    <Star size={10} className="fill-amber-500" />
+                    Favorites ({groupedPackages.favorites.length})
+                  </span>
+                  <ChevronDown size={12} className={`transition-transform ${collapsedCategories['favorites'] ? '-rotate-90' : ''}`} />
+                </button>
 
-              return (
-                <div key={category}>
-                  <button
-                    onClick={() => toggleCategory(category)}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium uppercase rounded ${
-                      isFavorites ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1">
-                      {isFavorites && <Star size={10} className="fill-amber-500" />}
-                      {category} ({pkgs.length})
-                    </span>
-                    <ChevronDown size={12} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-                  </button>
+                {!collapsedCategories['favorites'] && (
+                  <div className="mt-1 space-y-0.5">
+                    {groupedPackages.favorites.map(pkg => (
+                      <button
+                        key={pkg.id}
+                        onClick={() => onAddToQuote({
+                          title: pkg.name,
+                          total: pkg.base_price || 0,
+                          labor_hours: pkg.base_hours || 1,
+                          source: 'package'
+                        })}
+                        className="w-full flex items-center justify-between px-2 py-1.5 text-sm bg-white border border-gray-100 rounded hover:border-blue-300 hover:bg-blue-50"
+                      >
+                        <span className="truncate flex-1 text-left">{pkg.name}</span>
+                        <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0 ml-2">
+                          <span>${pkg.base_price?.toFixed(0)}</span>
+                          <span>{pkg.base_hours}h</span>
+                          <Plus size={12} className="text-blue-500" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                  {!isCollapsed && (
-                    <div className="mt-1 space-y-0.5">
-                      {pkgs.map(pkg => (
-                        <button
-                          key={pkg.id}
-                          onClick={() => onAddToQuote({
-                            title: pkg.name,
-                            total: pkg.base_price || 0,
-                            labor_hours: pkg.base_hours || 1,
-                            source: 'package'
-                          })}
-                          className="w-full flex items-center justify-between px-2 py-1.5 text-sm bg-white border border-gray-100 rounded hover:border-blue-300 hover:bg-blue-50"
-                        >
-                          <span className="truncate flex-1 text-left">{pkg.name}</span>
-                          <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0 ml-2">
-                            <span>${pkg.base_price?.toFixed(0)}</span>
-                            <span>{pkg.base_hours}h</span>
-                            <Plus size={12} className="text-blue-500" />
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {/* Then render other categories */}
+            {Object.entries(groupedPackages)
+              .filter(([category]) => category !== 'favorites')
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([category, pkgs]) => {
+                if (!pkgs || pkgs.length === 0) return null;
+                const isCollapsed = collapsedCategories[category];
+
+                return (
+                  <div key={category}>
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium uppercase rounded bg-gray-100 text-gray-600"
+                    >
+                      <span>{category} ({pkgs.length})</span>
+                      <ChevronDown size={12} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                    </button>
+
+                    {!isCollapsed && (
+                      <div className="mt-1 space-y-0.5">
+                        {pkgs.map(pkg => (
+                          <button
+                            key={pkg.id}
+                            onClick={() => onAddToQuote({
+                              title: pkg.name,
+                              total: pkg.base_price || 0,
+                              labor_hours: pkg.base_hours || 1,
+                              source: 'package'
+                            })}
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-sm bg-white border border-gray-100 rounded hover:border-blue-300 hover:bg-blue-50"
+                          >
+                            <span className="truncate flex-1 text-left">{pkg.name}</span>
+                            <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0 ml-2">
+                              <span>${pkg.base_price?.toFixed(0)}</span>
+                              <span>{pkg.base_hours}h</span>
+                              <Plus size={12} className="text-blue-500" />
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
