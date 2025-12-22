@@ -86,9 +86,8 @@ export function QuoteBuilder({
         </label>
         
         {services.length === 0 ? (
-          <div className="text-sm text-gray-400 py-8 text-center border-2 border-dashed border-gray-200 rounded-lg">
-            Click items from history to add,<br />
-            or use Quick Add above
+          <div className="text-sm text-gray-400 py-6 text-center">
+            No services added yet
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
