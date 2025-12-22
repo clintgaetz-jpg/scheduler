@@ -4,7 +4,6 @@ import { Plus, DollarSign, Clock, Edit3 } from 'lucide-react';
 // ============================================
 // CustomLineInput Component
 // Quick entry for custom labor lines
-// Calculates price from hours at $160/hr + 10% supplies
 // ============================================
 
 const DEFAULT_LABOR_RATE = 160;
@@ -17,12 +16,10 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
   const [priceOverride, setPriceOverride] = useState('');
   const [showPriceOverride, setShowPriceOverride] = useState(false);
 
-  // Calculate price from hours
   const calculatedPrice = hours 
     ? (parseFloat(hours) * laborRate * (1 + suppliesPercent / 100)).toFixed(2)
     : '0.00';
 
-  // Final price (override or calculated)
   const finalPrice = priceOverride || calculatedPrice;
 
   const handleAdd = () => {
@@ -34,7 +31,6 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
       priceOverride ? parseFloat(priceOverride) : null
     );
     
-    // Reset form
     setDescription('');
     setHours('');
     setPriceOverride('');
@@ -71,7 +67,6 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
         </button>
       </div>
       
-      {/* Description */}
       <input
         type="text"
         value={description}
@@ -82,9 +77,7 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
         autoFocus
       />
       
-      {/* Hours + Price Row */}
       <div className="flex gap-2 mb-2">
-        {/* Hours Input */}
         <div className="flex-1">
           <label className="block text-xs text-blue-700 mb-1">Hours</label>
           <div className="relative">
@@ -102,7 +95,6 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
           </div>
         </div>
         
-        {/* Calculated/Override Price */}
         <div className="flex-1">
           <label className="block text-xs text-blue-700 mb-1 flex items-center justify-between">
             <span>Price</span>
@@ -137,12 +129,10 @@ export function CustomLineInput({ onAdd, laborRate = DEFAULT_LABOR_RATE, supplie
         </div>
       </div>
 
-      {/* Rate Info */}
       <div className="text-xs text-blue-600 mb-3">
         Rate: ${laborRate}/hr + {suppliesPercent}% supplies = ${(laborRate * (1 + suppliesPercent / 100)).toFixed(2)}/hr
       </div>
 
-      {/* Add Button */}
       <button
         onClick={handleAdd}
         disabled={!description.trim() || !hours}

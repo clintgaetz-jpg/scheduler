@@ -2,11 +2,7 @@
 export { BookingModal } from './BookingModal';
 export { default } from './BookingModal';
 
-// Panels (if needed individually)
-export * from './panels';
-
-// Components (if needed individually)
-export * from './components';
-
-// Hooks
-export * from './hooks';
+// Keep these for future use
+export { ServiceSettings } from './ServiceSettings';
+export { BookingOptions } from './BookingOptions';
+export { NextAvailable } from './NextAvailable';

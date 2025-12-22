@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { 
   Search, X, User, Phone, Mail, MapPin, Building2, 
-  ChevronDown, SortAsc, Clock, AlertTriangle, Plus,
-  MessageSquare, Bot, FileText
+  ChevronDown, Clock, AlertTriangle, Plus,
+  MessageSquare
 } from 'lucide-react';
-import { VehicleCard } from '../components/VehicleCard';
-import { CustomerNotesSection } from '../components/CustomerNotesSection';
+import { VehicleCard } from '../parts/VehicleCard';
+import { CustomerNotesSection } from '../parts/CustomerNotesSection';
 
 // ============================================
 // CustomerFleetPanel - Left Panel
 // Shows customer info and fleet overview
 // ============================================
+
+const SUPABASE_URL = 'https://hjhllnczzfqsoekywjpq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M';
 
 export function CustomerFleetPanel({
   customer,
@@ -42,12 +45,12 @@ export function CustomerFleetPanel({
     setSearching(true);
     try {
       const res = await fetch(
-        `https://hjhllnczzfqsoekywjpq.supabase.co/rest/v1/rpc/search_customers_v2`,
+        `${SUPABASE_URL}/rest/v1/rpc/search_customers_v2`,
         {
           method: 'POST',
           headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ search_term: term })
@@ -68,12 +71,12 @@ export function CustomerFleetPanel({
     
     try {
       const res = await fetch(
-        `https://hjhllnczzfqsoekywjpq.supabase.co/rest/v1/rpc/get_customer_booking_context`,
+        `${SUPABASE_URL}/rest/v1/rpc/get_customer_booking_context`,
         {
           method: 'POST',
           headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ p_customer_id: result.id })
@@ -81,7 +84,6 @@ export function CustomerFleetPanel({
       );
       const data = await res.json();
       
-      // Combine customer data with context
       const fullCustomer = {
         ...data.customer,
         vehicles: data.vehicles || [],
@@ -91,13 +93,11 @@ export function CustomerFleetPanel({
       onSelectCustomer(fullCustomer);
     } catch (err) {
       console.error('Failed to load customer context:', err);
-      // Fallback to basic customer data
       onSelectCustomer(result);
     }
   };
 
   if (!customer) {
-    // Search state
     return (
       <div className="p-4 h-full flex flex-col">
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -120,7 +120,6 @@ export function CustomerFleetPanel({
           )}
         </div>
 
-        {/* Search Results */}
         {searchResults.length > 0 && (
           <div className="mt-2 border border-gray-200 rounded-lg shadow-lg bg-white max-h-[400px] overflow-y-auto">
             {searchResults.map((result) => (
@@ -152,10 +151,9 @@ export function CustomerFleetPanel({
     );
   }
 
-  // Customer selected - show info + fleet
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Customer Card - Fixed at top */}
+      {/* Customer Card */}
       <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
@@ -178,7 +176,6 @@ export function CustomerFleetPanel({
           </div>
         </div>
 
-        {/* Contact Info */}
         <div className="space-y-1 text-sm">
           {customer.primary_phone && (
             <div className="flex items-center gap-2 text-gray-700">
@@ -206,7 +203,6 @@ export function CustomerFleetPanel({
           )}
         </div>
 
-        {/* Stats Row */}
         <div className="flex items-center gap-3 mt-3 text-xs">
           {customer.customer_since && (
             <span className="text-gray-500">
@@ -229,7 +225,6 @@ export function CustomerFleetPanel({
           )}
         </div>
 
-        {/* Contact Preferences */}
         <div className="flex flex-wrap gap-1.5 mt-3">
           {customer.prefers_call && (
             <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
@@ -254,16 +249,14 @@ export function CustomerFleetPanel({
         </div>
       </div>
 
-      {/* Customer Notes Section */}
       <CustomerNotesSection 
         notes={customer.notes}
         aiSummary={customer.ai_summary}
         communicationHistory={customer.communication_history}
       />
 
-      {/* Vehicle List - Scrollable */}
+      {/* Vehicle List */}
       <div className="flex-1 overflow-y-auto">
-        {/* Header with sort */}
         <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between sticky top-0">
           <span className="text-sm font-medium text-gray-700">
             Vehicles ({vehicles.length + (inactiveVehicles?.length || 0)})
@@ -288,7 +281,6 @@ export function CustomerFleetPanel({
           </div>
         </div>
 
-        {/* New Vehicle Form */}
         {selectedVehicle?.isNew && (
           <div className="p-3 m-3 bg-blue-50 rounded-lg border-2 border-blue-300">
             <div className="text-xs font-medium text-blue-800 mb-2">New Vehicle</div>
@@ -342,7 +334,6 @@ export function CustomerFleetPanel({
           </div>
         )}
 
-        {/* Active Vehicles */}
         <div className="p-2 space-y-2">
           {vehicles.map((vehicle) => (
             <VehicleCard
@@ -355,7 +346,6 @@ export function CustomerFleetPanel({
           ))}
         </div>
 
-        {/* Inactive Vehicles */}
         {inactiveVehicles && inactiveVehicles.length > 0 && (
           <div className="border-t border-gray-200">
             <button

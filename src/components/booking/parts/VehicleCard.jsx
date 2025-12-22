@@ -19,7 +19,6 @@ export function VehicleCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  // Status styling
   const statusConfig = {
     recent: { 
       bg: 'bg-green-50', 
@@ -47,13 +46,11 @@ export function VehicleCard({
   const status = statusConfig[vehicle.service_status] || statusConfig.recent;
   const StatusIcon = status.icon;
 
-  // Format mileage
   const formatKm = (km) => {
     if (!km) return null;
     return km.toLocaleString() + ' km';
   };
 
-  // Format days ago
   const formatDaysAgo = (days) => {
     if (days === null || days === undefined) return null;
     if (days === 0) return 'Today';
@@ -63,11 +60,9 @@ export function VehicleCard({
     return `${(days / 365).toFixed(1)}yr ago`;
   };
 
-  // Check if has deferred work
   const hasDeferredWork = vehicle.last_3_invoices?.some(inv => inv.deferred?.length > 0);
 
   if (compact) {
-    // Compact view for inactive vehicles
     return (
       <button
         onClick={onSelect}
@@ -105,9 +100,7 @@ export function VehicleCard({
         }
       `}
     >
-      {/* Main Row */}
       <div className="flex items-stretch">
-        {/* Expand/Collapse Toggle - Left side */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -122,12 +115,10 @@ export function VehicleCard({
           )}
         </button>
 
-        {/* Vehicle Info - Clickable to select */}
         <button
           onClick={onSelect}
           className="flex-1 p-3 text-left"
         >
-          {/* Top Row: Year Make Model + Status Badge */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
               <Car size={16} className={isSelected ? 'text-blue-600' : 'text-gray-500'} />
@@ -144,7 +135,6 @@ export function VehicleCard({
             </span>
           </div>
 
-          {/* Second Row: Plate, Unit#, Mileage */}
           <div className="flex items-center gap-3 mt-1.5 text-sm">
             {vehicle.plate && (
               <span className="font-mono bg-white/70 px-1.5 py-0.5 rounded border border-gray-200 text-xs">
@@ -156,7 +146,6 @@ export function VehicleCard({
             )}
           </div>
 
-          {/* Third Row: Mileage Info */}
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
             {vehicle.last_mileage && (
               <span className="flex items-center gap-1">
@@ -174,7 +163,6 @@ export function VehicleCard({
             )}
           </div>
 
-          {/* Fourth Row: Service Status */}
           <div className="flex items-center gap-3 mt-2 text-xs">
             <span className="flex items-center gap-1 text-gray-600">
               <Calendar size={12} className="text-gray-400" />
@@ -196,7 +184,6 @@ export function VehicleCard({
             )}
           </div>
 
-          {/* Service Due Summary (if overdue or due soon) */}
           {vehicle.service_due_summary && vehicle.service_status !== 'recent' && (
             <div className={`mt-2 text-xs font-medium ${
               vehicle.service_status === 'overdue' ? 'text-red-600' : 'text-amber-600'
@@ -207,7 +194,6 @@ export function VehicleCard({
         </button>
       </div>
 
-      {/* Expanded: Last 3 Invoices Preview */}
       {expanded && vehicle.last_3_invoices && vehicle.last_3_invoices.length > 0 && (
         <div className="border-t border-gray-200 bg-white/50">
           {vehicle.last_3_invoices.map((invoice, idx) => (
@@ -215,7 +201,6 @@ export function VehicleCard({
               key={invoice.workorder_number || idx}
               className="px-4 py-2 border-b border-gray-100 last:border-0"
             >
-              {/* Invoice Header */}
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-gray-700">
                   WO# {invoice.workorder_number}
@@ -228,7 +213,6 @@ export function VehicleCard({
                 </div>
               </div>
 
-              {/* Deferred Work */}
               {invoice.deferred && invoice.deferred.length > 0 && (
                 <div className="mt-1.5 space-y-1">
                   {invoice.deferred.filter(d => !d.is_header).map((def, i) => (
@@ -252,7 +236,6 @@ export function VehicleCard({
         </div>
       )}
 
-      {/* Open Workorder Banner */}
       {vehicle.open_workorder && (
         <div className="px-3 py-2 bg-blue-100 border-t border-blue-200 text-xs">
           <div className="flex items-center gap-2 text-blue-800">

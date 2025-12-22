@@ -89,6 +89,7 @@ export function BookingModal({
             <CustomerFleetPanel
               customer={booking.customer}
               vehicles={booking.vehicles}
+              inactiveVehicles={booking.inactiveVehicles}
               selectedVehicle={booking.selectedVehicle}
               onSelectCustomer={booking.selectCustomer}
               onClearCustomer={booking.clearCustomer}

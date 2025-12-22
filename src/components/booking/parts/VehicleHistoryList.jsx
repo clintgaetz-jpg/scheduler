@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { 
   ChevronDown, ChevronRight, Plus, CheckCircle, 
-  AlertTriangle, FileText, Clock, DollarSign, Wrench
+  AlertTriangle, FileText, Clock, Wrench
 } from 'lucide-react';
 
 // ============================================
 // VehicleHistoryList Component
 // Shows all work orders with expandable line items
-// Click to add completed or deferred work to quote
 // ============================================
 
 export function VehicleHistoryList({ 
@@ -15,7 +14,6 @@ export function VehicleHistoryList({
   onAddService, 
   addedServiceIds = [] 
 }) {
-  // Track which WOs are expanded (default: first one)
   const [expandedWOs, setExpandedWOs] = useState(
     new Set(invoices.length > 0 ? [invoices[0].workorder_number] : [])
   );
@@ -32,7 +30,6 @@ export function VehicleHistoryList({
     });
   };
 
-  // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -43,9 +40,7 @@ export function VehicleHistoryList({
     });
   };
 
-  // Check if a package is already added
   const isAdded = (pkg) => {
-    // Check by template_id or by name+source_wo combo
     if (pkg.template_id && addedServiceIds.includes(pkg.template_id)) return true;
     const compositeId = `${pkg.source_wo}-${pkg.title}`;
     return addedServiceIds.includes(compositeId);
@@ -62,7 +57,6 @@ export function VehicleHistoryList({
             key={invoice.workorder_number}
             className="border border-gray-200 rounded-lg overflow-hidden bg-white"
           >
-            {/* WO Header - Click to expand */}
             <button
               onClick={() => toggleWO(invoice.workorder_number)}
               className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -107,11 +101,9 @@ export function VehicleHistoryList({
               </div>
             </button>
 
-            {/* Expanded Content */}
             {isExpanded && (
               <div className="border-t border-gray-100">
                 
-                {/* Completed Packages */}
                 {invoice.completed_packages?.length > 0 && (
                   <div className="p-3">
                     <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
@@ -139,7 +131,6 @@ export function VehicleHistoryList({
                   </div>
                 )}
 
-                {/* Deferred Packages */}
                 {invoice.deferred_packages?.filter(d => !d.is_header).length > 0 && (
                   <div className="p-3 bg-amber-50 border-t border-amber-100">
                     <div className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1">
@@ -169,7 +160,6 @@ export function VehicleHistoryList({
                   </div>
                 )}
 
-                {/* Labor/Parts Summary */}
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
                   <div className="flex items-center gap-4">
                     <span className="flex items-center gap-1">
@@ -191,10 +181,6 @@ export function VehicleHistoryList({
   );
 }
 
-// ============================================
-// PackageLine Component
-// Single package in history - clickable to add
-// ============================================
 function PackageLine({ pkg, type, onAdd, isAdded }) {
   const isDeferred = type === 'deferred';
   
@@ -238,11 +224,6 @@ function PackageLine({ pkg, type, onAdd, isAdded }) {
           <div className={`font-medium ${isDeferred ? 'text-amber-700' : 'text-gray-900'}`}>
             ${pkg.total?.toLocaleString()}
           </div>
-          {(pkg.labor_total || pkg.parts_total) && (
-            <div className="text-gray-400 text-xs">
-              L: ${pkg.labor_total?.toLocaleString() || 0} / P: ${pkg.parts_total?.toLocaleString() || 0}
-            </div>
-          )}
         </div>
       </div>
     </button>

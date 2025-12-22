@@ -59,7 +59,7 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [vehicleHistory, setVehicleHistory] = useState(null);
   const [vehicleHistoryLoading, setVehicleHistoryLoading] = useState(false);
-  const [vehicleSort, setVehicleSort] = useState('most_overdue'); // most_overdue | last_visit | alphabetical
+  const [vehicleSort, setVehicleSort] = useState('most_overdue');
 
   // Scheduling state
   const [scheduling, setScheduling] = useState({
@@ -79,7 +79,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
   const sortedVehicles = [...vehicles].sort((a, b) => {
     switch (vehicleSort) {
       case 'most_overdue':
-        // Overdue first, then due_soon, then recent
         const statusOrder = { overdue: 0, due_soon: 1, recent: 2 };
         const aOrder = statusOrder[a.service_status] ?? 2;
         const bOrder = statusOrder[b.service_status] ?? 2;
@@ -118,7 +117,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
   const selectVehicle = useCallback((vehicle) => {
     setSelectedVehicle(vehicle);
     setVehicleHistory(null);
-    // Auto-load history when vehicle selected
     if (vehicle && !vehicle.isNew && vehicle.vin) {
       loadVehicleHistory(vehicle.vin);
     }
@@ -180,11 +178,9 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
   const updateScheduling = useCallback((updates) => {
     setScheduling(prev => {
       const next = { ...prev, ...updates };
-      // Auto-fix weekend dates
       if (updates.date && isWeekend(updates.date)) {
         next.date = getNextWeekday(updates.date);
       }
-      // Clear hold if tech selected
       if (updates.techId && prev.saveToHold) {
         next.saveToHold = false;
       }
@@ -232,19 +228,16 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
     setSaving(true);
 
     try {
-      // Build notes with hold reason if applicable
       let notes = scheduling.notes;
       if (scheduling.saveToHold && scheduling.holdReason) {
         notes = `[HOLD: ${scheduling.holdReason}] ${notes}`.trim();
       }
 
-      // Parse customer name
       const nameParts = (customer.file_as || '').split(',').map(s => s.trim());
       const lastName = nameParts[0] || '';
       const firstName = nameParts[1] || '';
 
       const apptData = {
-        // Customer - Core
         customer_id: customer.id,
         customer_name: customer.file_as,
         customer_phone: customer.primary_phone,
@@ -252,8 +245,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
         customer_email: customer.email || null,
         company_name: customer.company_name || null,
         protractor_contact_id: customer.protractor_contact_id,
-        
-        // Customer - Extended
         customer_first_name: firstName,
         customer_last_name: lastName,
         customer_street: customer.street || null,
@@ -262,8 +253,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
         customer_zip: customer.zip || null,
         customer_country: customer.country || 'Canada',
         customer_address: [customer.street, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || null,
-        
-        // Customer stats
         customer_since: customer.customer_since || null,
         customer_lifetime_visits: customer.lifetime_visits || null,
         customer_lifetime_spent: customer.lifetime_spent || null,
@@ -271,20 +260,14 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
         customer_last_visit_date: customer.last_visit_date || null,
         customer_days_since_visit: customer.days_since_visit || null,
         customer_is_supplier: customer.is_supplier || false,
-        
-        // Customer preferences
         prefers_call: customer.prefers_call ?? true,
         prefers_text: customer.prefers_text ?? false,
         prefers_email: customer.prefers_email ?? false,
-        
-        // Vehicle - Core
         vehicle_id: selectedVehicle?.vehicle_id || selectedVehicle?.id || null,
         vehicle_vin: selectedVehicle?.vin || null,
         vehicle_plate: selectedVehicle?.plate || null,
         vehicle_mileage: selectedVehicle?.last_mileage ? parseInt(selectedVehicle.last_mileage) : null,
         unit_number: selectedVehicle?.unit_number || null,
-        
-        // Vehicle - Extended
         vehicle_year: selectedVehicle?.year ? String(selectedVehicle.year) : null,
         vehicle_make: selectedVehicle?.make || null,
         vehicle_model: selectedVehicle?.model || null,
@@ -296,37 +279,25 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
           : null,
         vehicle_production_date: selectedVehicle?.production_date || null,
         vehicle_notes: selectedVehicle?.vehicle_notes || null,
-        
-        // Vehicle service status
         vehicle_service_status: selectedVehicle?.service_status || null,
         vehicle_days_since_service: selectedVehicle?.days_since_service || null,
         vehicle_last_service_date: selectedVehicle?.last_service_date || null,
         vehicle_mileage_estimated: selectedVehicle?.estimated_current_mileage || null,
         vehicle_km_since_service: selectedVehicle?.km_since_service || null,
         vehicle_service_due_reason: selectedVehicle?.service_due_reason || null,
-        
-        // Flags
         is_new_customer: customer.isNew || false,
         is_new_vehicle: selectedVehicle?.isNew || false,
-        
-        // Scheduling
         scheduled_date: scheduling.saveToHold ? null : scheduling.date,
         time_slot: scheduling.timeSlot,
         tech_id: scheduling.saveToHold ? null : scheduling.techId,
         estimated_hours: totals.hours || 1,
-        
-        // Hold status
         is_on_hold: scheduling.saveToHold,
         hold_reason: scheduling.saveToHold ? scheduling.holdReason : null,
         hold_notes: scheduling.saveToHold ? `Saved without tech/date: ${scheduling.holdReason}` : null,
         hold_at: scheduling.saveToHold ? new Date().toISOString() : null,
         status: 'scheduled',
-        
-        // Services
         services: services,
         estimated_total: totals.total,
-        
-        // Notes
         notes: notes.trim(),
         source: 'manual'
       };
@@ -349,7 +320,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
   }, [canBook, validationMessage, customer, selectedVehicle, scheduling, services, totals, editingAppointment]);
 
   return {
-    // Customer
     customer,
     customerLoading,
     searchTerm,
@@ -358,8 +328,6 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
     search,
     selectCustomer,
     clearCustomer,
-    
-    // Vehicles
     vehicles: activeVehicles,
     inactiveVehicles,
     selectedVehicle,
@@ -368,13 +336,9 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
     updateNewVehicleData,
     vehicleSort,
     setVehicleSort,
-    
-    // Vehicle history
     vehicleHistory,
     vehicleHistoryLoading,
     loadVehicleHistory,
-    
-    // Quote
     services,
     totals,
     addService,
@@ -382,12 +346,8 @@ export function useBookingState({ editingAppointment, selectedDate, settings }) 
     removeService,
     reorderServices,
     clearServices,
-    
-    // Scheduling
     scheduling,
     updateScheduling,
-    
-    // Save
     canBook,
     validationMessage,
     saving,

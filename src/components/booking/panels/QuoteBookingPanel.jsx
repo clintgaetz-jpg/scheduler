@@ -1,17 +1,15 @@
 import React from 'react';
 import { 
-  X, Calendar, User, Clock, AlertTriangle, Pause,
-  GripVertical, Package, History, Edit3, CheckCircle,
-  ChevronDown
+  X, Calendar, User, AlertTriangle, Pause,
+  GripVertical, Package, History, Edit3, CheckCircle
 } from 'lucide-react';
-import { HoldReasonSelect } from '../components/HoldReasonSelect';
+import { HoldReasonSelect } from '../parts/HoldReasonSelect';
 
 // ============================================
 // QuoteBookingPanel - Right Panel
 // Shows quote lines, totals, and booking controls
 // ============================================
 
-// Format money
 const formatMoney = (amount) => {
   if (!amount && amount !== 0) return '$0.00';
   return '$' + parseFloat(amount).toLocaleString('en-US', { 
@@ -36,7 +34,6 @@ export function QuoteBookingPanel({
   onSave,
   onCancel
 }) {
-  // Check if date is weekend
   const isWeekend = (dateStr) => {
     if (!dateStr) return false;
     const d = new Date(dateStr + 'T00:00:00');
@@ -44,12 +41,10 @@ export function QuoteBookingPanel({
     return day === 0 || day === 6;
   };
 
-  // Check if date is holiday
   const isHoliday = (dateStr) => {
     return holidays.some(h => h.date === dateStr);
   };
 
-  // Get holiday name
   const getHolidayName = (dateStr) => {
     const holiday = holidays.find(h => h.date === dateStr);
     return holiday?.name || 'Holiday';
@@ -59,7 +54,6 @@ export function QuoteBookingPanel({
   const dateIsHoliday = isHoliday(scheduling.date);
   const dateBlocked = dateIsWeekend || dateIsHoliday;
 
-  // Source styling
   const sourceConfig = {
     history: { icon: History, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
     deferred: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
@@ -70,12 +64,10 @@ export function QuoteBookingPanel({
   return (
     <div className="flex flex-col h-full">
       
-      {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
         <h3 className="font-semibold text-gray-900">Quote & Booking</h3>
       </div>
 
-      {/* Services List - Scrollable */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-700">
@@ -104,12 +96,10 @@ export function QuoteBookingPanel({
                   className={`p-3 rounded-lg border ${config.bg} group`}
                 >
                   <div className="flex items-start gap-2">
-                    {/* Drag Handle (future) */}
                     <div className="mt-1 cursor-grab opacity-0 group-hover:opacity-50">
                       <GripVertical size={14} className="text-gray-400" />
                     </div>
                     
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -151,7 +141,6 @@ export function QuoteBookingPanel({
         )}
       </div>
 
-      {/* Totals */}
       <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-gray-600">
@@ -179,12 +168,9 @@ export function QuoteBookingPanel({
         </div>
       </div>
 
-      {/* Scheduling */}
       <div className="px-4 py-3 border-t border-gray-200 bg-white flex-shrink-0 space-y-3">
         
-        {/* Date + Tech Row */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Date */}
           <div>
             <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
               <Calendar size={12} />
@@ -214,7 +200,6 @@ export function QuoteBookingPanel({
             )}
           </div>
 
-          {/* Technician */}
           <div>
             <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
               <User size={12} />
@@ -236,7 +221,6 @@ export function QuoteBookingPanel({
           </div>
         </div>
 
-        {/* Notes */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Notes</label>
           <textarea
@@ -248,7 +232,6 @@ export function QuoteBookingPanel({
           />
         </div>
 
-        {/* Save to Hold Option */}
         <div className={`p-3 rounded-lg border ${scheduling.saveToHold ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -274,9 +257,7 @@ export function QuoteBookingPanel({
         </div>
       </div>
 
-      {/* Footer */}
       <div className="px-4 py-3 border-t border-gray-200 bg-gray-100 flex-shrink-0">
-        {/* Validation Message */}
         {validationMessage && (
           <div className="text-xs text-amber-600 flex items-center gap-1 mb-2">
             <AlertTriangle size={12} />

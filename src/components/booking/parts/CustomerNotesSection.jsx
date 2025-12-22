@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   AlertTriangle, Bot, MessageSquare, ChevronDown, 
-  Edit3, Save, X, FileText
+  Edit3, Save, FileText
 } from 'lucide-react';
 
 // ============================================
@@ -15,14 +15,14 @@ export function CustomerNotesSection({
   communicationHistory,
   onUpdateNotes 
 }) {
-  const [expanded, setExpanded] = useState(!!notes); // Auto-expand if has notes
+  const [expanded, setExpanded] = useState(!!notes);
   const [editing, setEditing] = useState(false);
   const [editedNotes, setEditedNotes] = useState(notes || '');
 
   const hasContent = notes || aiSummary || communicationHistory?.length > 0;
 
   if (!hasContent && !expanded) {
-    return null; // Hide section if no content
+    return null;
   }
 
   const handleSaveNotes = () => {
@@ -32,7 +32,6 @@ export function CustomerNotesSection({
 
   return (
     <div className="border-b border-gray-200 bg-white">
-      {/* Toggle Header */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full px-4 py-2 flex items-center justify-between text-sm hover:bg-gray-50"
@@ -55,7 +54,6 @@ export function CustomerNotesSection({
       {expanded && (
         <div className="px-4 pb-3 space-y-3">
           
-          {/* Shop Notes */}
           {(notes || editing) && (
             <div className="bg-amber-50 rounded-lg border border-amber-200 overflow-hidden">
               <div className="px-3 py-1.5 bg-amber-100 flex items-center justify-between">
@@ -109,7 +107,6 @@ export function CustomerNotesSection({
             </div>
           )}
 
-          {/* AI Summary - Placeholder */}
           {aiSummary ? (
             <div className="bg-purple-50 rounded-lg border border-purple-200 overflow-hidden">
               <div className="px-3 py-1.5 bg-purple-100 flex items-center gap-1">
@@ -127,7 +124,6 @@ export function CustomerNotesSection({
             </div>
           )}
 
-          {/* Communication History - Placeholder */}
           {communicationHistory && communicationHistory.length > 0 ? (
             <div className="bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
               <div className="px-3 py-1.5 bg-blue-100 flex items-center gap-1">

@@ -15,14 +15,12 @@ export function ServiceFavorites({
 
   return (
     <div className="mb-4">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-2">
         <Star size={14} className="text-amber-500 fill-amber-500" />
         <span className="text-sm font-medium text-gray-700">Favorites</span>
         <span className="text-xs text-gray-400">({favorites.length})</span>
       </div>
 
-      {/* Grid of favorites */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
         {favorites.slice(0, 12).map(pkg => {
           const price = parseFloat(pkg.base_price || pkg.default_price) || 0;
@@ -63,7 +61,6 @@ export function ServiceFavorites({
         })}
       </div>
 
-      {/* Show more indicator */}
       {favorites.length > 12 && (
         <p className="text-xs text-gray-400 mt-2 text-center">
           +{favorites.length - 12} more favorites in categories below

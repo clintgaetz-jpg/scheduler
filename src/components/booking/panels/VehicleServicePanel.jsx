@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Car, History, Package, Star, ChevronDown, ChevronRight,
+  Car, History, Package, ChevronDown, ChevronRight,
   Plus, Search, Loader2, AlertTriangle, Gauge, Calendar,
   CheckCircle, Clock
 } from 'lucide-react';
-import { VehicleHistoryList } from '../components/VehicleHistoryList';
-import { ServiceFavorites } from '../components/ServiceFavorites';
-import { CustomLineInput } from '../components/CustomLineInput';
+import { VehicleHistoryList } from '../parts/VehicleHistoryList';
+import { ServiceFavorites } from '../parts/ServiceFavorites';
+import { CustomLineInput } from '../parts/CustomLineInput';
 
 // ============================================
 // VehicleServicePanel - Middle Panel
@@ -25,21 +25,18 @@ export function VehicleServicePanel({
   addedServiceIds = [],
   onLoadVehicleHistory
 }) {
-  const [activeTab, setActiveTab] = useState('history'); // history | services
+  const [activeTab, setActiveTab] = useState('history');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState(new Set(['favorites']));
 
-  // Load history when vehicle changes
   useEffect(() => {
     if (selectedVehicle && !selectedVehicle.isNew && selectedVehicle.vin && !vehicleHistory) {
       onLoadVehicleHistory?.(selectedVehicle.vin);
     }
   }, [selectedVehicle?.vin]);
 
-  // Get favorites
   const favorites = servicePackages.filter(p => p.is_favorite && p.is_active !== false);
 
-  // Group packages by category
   const packagesByCategory = serviceCategories
     .filter(cat => !cat.is_hidden)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -48,12 +45,11 @@ export function VehicleServicePanel({
       packages: servicePackages.filter(p => 
         p.category === cat.id && 
         p.is_active !== false &&
-        !p.is_favorite // Don't show favorites twice
+        !p.is_favorite
       ).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
     }))
     .filter(cat => cat.packages.length > 0);
 
-  // Filter packages by search
   const filteredPackages = searchTerm
     ? servicePackages.filter(p => 
         p.is_active !== false &&
@@ -61,7 +57,6 @@ export function VehicleServicePanel({
       )
     : null;
 
-  // Toggle category expansion
   const toggleCategory = (catId) => {
     setExpandedCategories(prev => {
       const next = new Set(prev);
@@ -72,12 +67,6 @@ export function VehicleServicePanel({
       }
       return next;
     });
-  };
-
-  // Format money
-  const formatMoney = (amount) => {
-    if (!amount && amount !== 0) return '$0';
-    return '$' + parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   if (!customer) {
@@ -133,13 +122,11 @@ export function VehicleServicePanel({
             )}
           </div>
 
-          {/* Vehicle Status Badge */}
           {!selectedVehicle.isNew && selectedVehicle.service_status && (
             <StatusBadge status={selectedVehicle.service_status} />
           )}
         </div>
 
-        {/* Mileage & Service Info */}
         {!selectedVehicle.isNew && (
           <div className="flex items-center gap-6 mt-3 text-sm">
             {selectedVehicle.last_mileage && (
@@ -165,7 +152,6 @@ export function VehicleServicePanel({
           </div>
         )}
 
-        {/* History Stats */}
         {vehicleHistory?.stats && (
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
             <span>{vehicleHistory.stats.total_invoices} visits</span>
@@ -209,7 +195,6 @@ export function VehicleServicePanel({
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
         
-        {/* HISTORY TAB */}
         {activeTab === 'history' && (
           <div className="p-4">
             {vehicleHistoryLoading ? (
@@ -236,11 +221,9 @@ export function VehicleServicePanel({
           </div>
         )}
 
-        {/* SERVICES TAB */}
         {activeTab === 'services' && (
           <div className="p-4 space-y-4">
             
-            {/* Search */}
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -260,7 +243,6 @@ export function VehicleServicePanel({
               )}
             </div>
 
-            {/* Search Results */}
             {filteredPackages && (
               <div className="space-y-1">
                 <p className="text-xs text-gray-500 mb-2">
@@ -277,10 +259,8 @@ export function VehicleServicePanel({
               </div>
             )}
 
-            {/* Normal View (no search) */}
             {!filteredPackages && (
               <>
-                {/* Favorites */}
                 {favorites.length > 0 && (
                   <ServiceFavorites
                     favorites={favorites}
@@ -289,7 +269,6 @@ export function VehicleServicePanel({
                   />
                 )}
 
-                {/* Categories */}
                 {packagesByCategory.map(cat => (
                   <div key={cat.id} className="border border-gray-200 rounded-lg overflow-hidden">
                     <button
@@ -322,7 +301,6 @@ export function VehicleServicePanel({
                   </div>
                 ))}
 
-                {/* Custom Line Input */}
                 <CustomLineInput onAdd={onAddCustomLine} />
               </>
             )}
@@ -333,9 +311,6 @@ export function VehicleServicePanel({
   );
 }
 
-// ============================================
-// StatusBadge Component
-// ============================================
 function StatusBadge({ status }) {
   const config = {
     recent: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle, label: 'OK' },
@@ -354,9 +329,6 @@ function StatusBadge({ status }) {
   );
 }
 
-// ============================================
-// PackageButton Component
-// ============================================
 function PackageButton({ pkg, onAdd, isAdded }) {
   const price = parseFloat(pkg.base_price || pkg.default_price) || 0;
   const hours = parseFloat(pkg.base_hours || pkg.default_hours) || 1;
