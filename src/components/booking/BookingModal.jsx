@@ -425,35 +425,17 @@ export function BookingModal({
                       </div>
                     </div>
                   ) : (
-                    /* Vehicle Selection */
-                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      {customer.vehicles?.length > 0 ? (
-                        <div className="space-y-2">
-                          {customer.vehicles.slice(0, 3).map((v, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setSelectedVehicle(v)}
-                              className="w-full text-left p-2 hover:bg-gray-100 rounded text-sm"
-                            >
-                              <span className="font-medium">{v.year} {v.make} {v.model}</span>
-                              {v.plate && <span className="ml-2 text-gray-500 font-mono">{v.plate}</span>}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => setSelectedVehicle({ isNew: true })}
-                            className="w-full text-left p-2 text-blue-600 hover:bg-blue-50 rounded text-sm flex items-center gap-1"
-                          >
-                            <Plus size={14} /> Add New Vehicle
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setSelectedVehicle({ isNew: true })}
-                          className="w-full text-center p-2 text-blue-600 hover:bg-blue-50 rounded text-sm flex items-center justify-center gap-1"
-                        >
-                          <Plus size={14} /> Add Vehicle
-                        </button>
-                      )}
+                    /* Empty Vehicle Placeholder - just Add button */
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 h-[88px] flex flex-col items-center justify-center">
+                      <button
+                        onClick={() => setSelectedVehicle({ isNew: true })}
+                        className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
+                      >
+                        <Plus size={14} /> Add New Vehicle
+                      </button>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Or select from list below
+                      </p>
                     </div>
                   )}
                 </div>
