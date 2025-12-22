@@ -405,7 +405,7 @@ export function BookingModal({
                       </button>
                     </div>
                   ) : selectedVehicle ? (
-                    /* Selected Vehicle Display - matches customer card style */
+                    /* Selected Vehicle Display - matches customer card size */
                     <div className="p-3 bg-green-50 rounded-lg border border-green-300">
                       <div className="flex justify-between items-start">
                         <div className="flex items-start gap-2">
@@ -414,20 +414,23 @@ export function BookingModal({
                             <div className="font-semibold text-gray-900">
                               {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
                             </div>
-                            <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-                              {selectedVehicle.plate && (
-                                <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">{selectedVehicle.plate}</span>
+                            {selectedVehicle.plate && (
+                              <div className="font-mono bg-white/50 px-1.5 py-0.5 rounded text-xs inline-block mt-1">{selectedVehicle.plate}</div>
+                            )}
+                            {selectedVehicle.engine && (
+                              <div className="text-xs text-gray-600 mt-1">{selectedVehicle.engine}</div>
+                            )}
+                            <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                              {selectedVehicle.last_mileage && (
+                                <span>Last: {selectedVehicle.last_mileage?.toLocaleString()} km</span>
                               )}
-                              {selectedVehicle.engine && (
-                                <span className="text-xs text-gray-500">{selectedVehicle.engine}</span>
+                              {selectedVehicle.estimated_current_mileage && (
+                                <span>Est: {selectedVehicle.estimated_current_mileage?.toLocaleString()} km</span>
                               )}
                             </div>
-                            {selectedVehicle.vin && (
-                              <div className="text-xs text-gray-400 font-mono mt-1">{selectedVehicle.vin}</div>
-                            )}
-                            {selectedVehicle.days_since_service && (
-                              <div className={`text-xs mt-1 ${selectedVehicle.days_since_service > 180 ? 'text-red-600' : 'text-gray-500'}`}>
-                                Last service: {selectedVehicle.days_since_service}d ago
+                            {selectedVehicle.days_since_service != null && (
+                              <div className={`text-xs mt-1 font-medium ${selectedVehicle.days_since_service > 180 ? 'text-red-600' : selectedVehicle.days_since_service > 120 ? 'text-amber-600' : 'text-green-600'}`}>
+                                {selectedVehicle.days_since_service}d since service
                               </div>
                             )}
                           </div>
@@ -481,7 +484,7 @@ export function BookingModal({
           </div>
 
           {/* Right Panel: Quote + Scheduling */}
-          <div className="w-96 flex flex-col">
+          <div className="w-[450px] flex flex-col">
             {/* Quote Builder - scrollable area */}
             <div className="flex-1 p-6 overflow-y-auto">
               <QuoteBuilder
@@ -492,106 +495,85 @@ export function BookingModal({
               />
             </div>
 
-            {/* Scheduling - fixed at bottom */}
-            <div className="p-4 border-t border-gray-200 bg-white">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    <Calendar size={12} className="inline mr-1" /> Date
-                  </label>
+            {/* Scheduling - compact row */}
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-3">
+                {/* Date */}
+                <div className="flex-1">
                   <input
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                    className={`w-full border rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
                       showWeekendWarning ? 'border-red-300 bg-red-50' : ''
                     }`}
                   />
-                  {showWeekendWarning && (
-                    <div className="mt-1 text-xs text-red-600 flex items-center gap-1">
-                      <AlertTriangle size={12} /> Cannot book on weekends
-                    </div>
-                  )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      <Clock size={12} className="inline mr-1" /> Time Slot
-                    </label>
-                    <select
-                      value={formData.time_slot}
-                      onChange={(e) => setFormData(f => ({ ...f, time_slot: e.target.value }))}
-                      className="w-full border rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="anytime">Anytime</option>
-                      <option value="morning">Morning</option>
-                      <option value="afternoon">Afternoon</option>
-                      <option value="waiter">Waiter</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      <User size={12} className="inline mr-1" /> Technician
-                    </label>
-                    <select
-                      value={formData.tech_id || ''}
-                      onChange={(e) => setFormData(f => ({ ...f, tech_id: e.target.value || null }))}
-                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
-                        !formData.tech_id && !saveToHold ? 'border-amber-300' : ''
-                      }`}
-                    >
-                      <option value="">Select tech...</option>
-                      {technicians.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                
+                {/* Tech */}
+                <div className="flex-1">
+                  <select
+                    value={formData.tech_id || ''}
+                    onChange={(e) => setFormData(f => ({ ...f, tech_id: e.target.value || null }))}
+                    className={`w-full border rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${
+                      !formData.tech_id && !saveToHold ? 'border-amber-300' : ''
+                    }`}
+                  >
+                    <option value="">Select tech...</option>
+                    {technicians.filter(t => t.is_active).map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                    rows={2}
-                    placeholder="Internal notes..."
-                  />
-                </div>
-
-                {/* Save to Hold toggle */}
-                {!formData.tech_id && (
-                  <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
-                    <input
-                      type="checkbox"
-                      id="saveToHold"
-                      checked={saveToHold}
-                      onChange={(e) => setSaveToHold(e.target.checked)}
-                      className="rounded border-amber-300"
-                    />
-                    <label htmlFor="saveToHold" className="text-sm text-amber-800 flex items-center gap-1">
-                      <Pause size={14} /> Save to Hold (no tech/date required)
-                    </label>
-                  </div>
-                )}
               </div>
+              
+              {showWeekendWarning && (
+                <div className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                  <AlertTriangle size={12} /> No weekends
+                </div>
+              )}
+
+              {/* Notes - compact */}
+              <div className="mt-2">
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full border rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  rows={1}
+                  placeholder="Notes..."
+                />
+              </div>
+
+              {/* Save to Hold toggle */}
+              {!formData.tech_id && (
+                <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 rounded border border-amber-200">
+                  <input
+                    type="checkbox"
+                    id="saveToHold"
+                    checked={saveToHold}
+                    onChange={(e) => setSaveToHold(e.target.checked)}
+                    className="rounded border-amber-300"
+                  />
+                  <label htmlFor="saveToHold" className="text-xs text-amber-800 flex items-center gap-1">
+                    <Pause size={12} /> Save to Hold
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center gap-3">
+            <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center gap-3">
               {/* Validation message */}
               {validationMessage && !saveToHold && (
-                <div className="text-sm text-amber-600 flex items-center gap-1">
-                  <AlertTriangle size={14} />
+                <div className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle size={12} />
                   {validationMessage}
                 </div>
               )}
               {saveToHold && (
-                <div className="text-sm text-amber-600 flex items-center gap-1">
-                  <Pause size={14} />
-                  Will save to Hold column
+                <div className="text-xs text-amber-600 flex items-center gap-1">
+                  <Pause size={12} />
+                  Will save to Hold
                 </div>
               )}
               
