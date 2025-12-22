@@ -416,3 +416,141 @@ export async function getHoldQueue() {
 export async function webhookCustomerLookup(phone) {
   return supabaseRpc('webhook_customer_lookup', { p_phone: phone });
 }
+
+// Generate booking group ID
+function generateBookingGroupId() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `BK${dateStr}-${random}`;
+}
+
+// Book appointment using direct insert (bypasses RPC to support all new fields)
+export async function bookAppointmentDirect(data) {
+  const bookingGroupId = data.booking_group_id || generateBookingGroupId();
+  
+  const appointmentData = {
+    // Customer fields - CORE
+    customer_id: data.customer_id || null,
+    customer_name: data.customer_name,
+    customer_phone: data.customer_phone || null,
+    customer_phone_secondary: data.customer_phone_secondary || null,
+    customer_email: data.customer_email || null,
+    customer_address: data.customer_address || null,
+    company_name: data.company_name || null,
+    protractor_contact_id: data.protractor_contact_id || null,
+    
+    // Customer fields - EXTENDED
+    customer_first_name: data.customer_first_name || null,
+    customer_last_name: data.customer_last_name || null,
+    customer_street: data.customer_street || null,
+    customer_city: data.customer_city || null,
+    customer_state: data.customer_state || null,
+    customer_zip: data.customer_zip || null,
+    customer_country: data.customer_country || null,
+    
+    // Customer stats
+    customer_since: data.customer_since || null,
+    customer_lifetime_visits: data.customer_lifetime_visits || null,
+    customer_lifetime_spent: data.customer_lifetime_spent || null,
+    customer_avg_visit_value: data.customer_avg_visit_value || null,
+    customer_last_visit_date: data.customer_last_visit_date || null,
+    customer_days_since_visit: data.customer_days_since_visit || null,
+    customer_is_supplier: data.customer_is_supplier || false,
+    
+    // Vehicle fields - CORE
+    vehicle_id: data.vehicle_id || null,
+    vehicle_vin: data.vehicle_vin || null,
+    vehicle_plate: data.vehicle_plate || null,
+    vehicle_mileage: data.vehicle_mileage || null,
+    unit_number: data.unit_number || null,
+    
+    // Vehicle fields - EXTENDED
+    vehicle_year: data.vehicle_year || null,
+    vehicle_make: data.vehicle_make || null,
+    vehicle_model: data.vehicle_model || null,
+    vehicle_submodel: data.vehicle_submodel || null,
+    vehicle_engine: data.vehicle_engine || null,
+    vehicle_color: data.vehicle_color || null,
+    vehicle_description: data.vehicle_description || null,
+    vehicle_mileage_estimated: data.vehicle_mileage_estimated || null,
+    
+    // Change tracking
+    is_new_customer: data.is_new_customer || false,
+    is_new_vehicle: data.is_new_vehicle || false,
+    protractor_updates: data.protractor_updates || {},
+    
+    // Scheduling
+    scheduled_date: data.scheduled_date || null,
+    time_slot: data.time_slot || 'anytime',
+    tech_id: data.tech_id || null,
+    estimated_hours: data.estimated_hours || 1,
+    
+    // Hold status
+    is_on_hold: data.is_on_hold || false,
+    hold_reason: data.hold_reason || null,
+    hold_notes: data.hold_notes || null,
+    hold_at: data.hold_at || null,
+    original_scheduled_date: data.original_scheduled_date || null,
+    original_tech_id: data.original_tech_id || null,
+    
+    // Status
+    status: data.status || 'scheduled',
+    
+    // Services
+    service_category: data.service_category || 'general',
+    services: data.services || [],
+    estimated_total: data.estimated_total || 0,
+    
+    // Notes
+    notes: data.notes || null,
+    customer_request: data.customer_request || null,
+    
+    // Meta
+    source: data.source || 'manual',
+    created_by: data.created_by || null,
+    booking_group_id: bookingGroupId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(appointmentData)
+  });
+  
+  const result = await res.json();
+  
+  // Return in the same format as the RPC function
+  if (Array.isArray(result) && result.length > 0) {
+    return {
+      success: true,
+      appointment_id: result[0].id,
+      booking_group_id: bookingGroupId,
+      appointment: result[0]
+    };
+  }
+  
+  return {
+    success: false,
+    error: result
+  };
+}
+
+// REPLACE the existing bookAppointment function with this:
+export async function bookAppointment(data) {
+  // Use direct insert to support all new fields
+  return bookAppointmentDirect(data);
+}
+
+
+
+
+
+
