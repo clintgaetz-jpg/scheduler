@@ -314,12 +314,59 @@ export function BookingModal({
     );
     if (exists) return;
 
-    setQuoteItems([...quoteItems, {
-      ...item,
+    // Full line structure matching Protractor format for consistency
+    const lineWithDefaults = {
+      // === IDENTITY ===
       id: Date.now(),
-      hours: item.labor_hours || item.hours || 1,
-      total: item.total || 0
-    }]);
+      protractor_line_id: item.protractor_line_id || null,
+      
+      // === WHAT ===
+      title: item.title || '',
+      description: item.description || null,
+      code: item.code || null,
+      template_id: item.template_id || null,
+      chapter: item.chapter || 'Service',
+      source: item.source || 'package',  // package | history | protractor | custom
+      source_wo: item.source_wo || null,
+      
+      // === LABOR ===
+      labor_hours: item.labor_hours || item.hours || 1,
+      labor_rate: item.labor_rate || LABOR_RATE,
+      labor_total: item.labor_total || 0,
+      
+      // === PARTS (totals) ===
+      parts_total: item.parts_total || 0,
+      parts_cost: item.parts_cost || item.cost || 0,
+      
+      // === TOTALS ===
+      total: item.total || 0,
+      cost: item.cost || 0,
+      margin: item.margin || 0,
+      margin_percent: item.margin_percent || 0,
+      
+      // === LINE STATUS ===
+      status: 'pending',  // pending | in_progress | done | hold
+      completed_at: null,
+      completed_by: null,
+      
+      // === ASSIGNMENT (for splitting) ===
+      tech_id: null,       // null = use appointment's tech
+      scheduled_date: null, // null = use appointment's date
+      
+      // === PARTS DETAIL ===
+      parts_status: 'none',  // none | needed | ordered | partial | here
+      parts_watch_po: null,
+      parts: [],  // Individual parts for this line
+      
+      // === NOTES ===
+      tech_notes: item.tech_notes || null,
+      line_notes: null,
+      
+      // === LEGACY (keep for display) ===
+      hours: item.labor_hours || item.hours || 1
+    };
+
+    setQuoteItems([...quoteItems, lineWithDefaults]);
   };
 
   const removeFromQuote = (id) => {
@@ -332,7 +379,7 @@ export function BookingModal({
   const gst = (subtotal + shopSupplies) * GST_RATE;
   const buffer = subtotal * BUFFER_RATE;
   const estimatedTotal = subtotal + shopSupplies + gst + buffer;
-  const totalHours = quoteItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const totalHours = quoteItems.reduce((sum, item) => sum + (item.labor_hours || item.hours || 0), 0);
 
   // ============================================
   // SAVE APPOINTMENT
