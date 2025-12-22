@@ -3,8 +3,7 @@ import {
   Search, X, User, Phone, Mail, MapPin, Building2, Car,
   ChevronDown, ChevronRight, Clock, AlertTriangle, Plus,
   MessageSquare, Calendar, Trash2, Package, Wrench,
-  FileText, DollarSign, History, Check, Edit, Star,
-  Smartphone, CreditCard
+  FileText, DollarSign, History, Check, Edit, Star
 } from 'lucide-react';
 
 // ============================================
@@ -24,7 +23,6 @@ const LABOR_RATE = 160;
 // ============================================
 function formatVIN(vin) {
   if (!vin || vin.length !== 17) return vin || '—';
-  // Positions: 8th (index 7), 10th (index 9), last 8 (index 9-16)
   return (
     <span className="font-mono text-xs">
       {vin.slice(0, 7)}
@@ -38,7 +36,7 @@ function formatVIN(vin) {
 }
 
 // ============================================
-// MAIN BOOKING MODAL - 4 PANEL LAYOUT v2
+// MAIN BOOKING MODAL - 4 PANEL LAYOUT v3
 // ============================================
 
 export function BookingModal({
@@ -55,7 +53,6 @@ export function BookingModal({
   const [searching, setSearching] = useState(false);
   const [customer, setCustomer] = useState(null);
   const [customerLoading, setCustomerLoading] = useState(false);
-  const [contactUpdateFlags, setContactUpdateFlags] = useState({});
 
   // Vehicle state
   const [vehicles, setVehicles] = useState([]);
@@ -87,7 +84,6 @@ export function BookingModal({
       setSelectedVehicle(null);
       setVehicleHistory(null);
       setQuoteItems([]);
-      setContactUpdateFlags({});
       setVehicleSearchTerm('');
       setFormData({
         scheduled_date: selectedDate || new Date().toISOString().split('T')[0],
@@ -176,7 +172,6 @@ export function BookingModal({
     setSelectedVehicle(null);
     setVehicleHistory(null);
     setQuoteItems([]);
-    setContactUpdateFlags({});
   };
 
   // ============================================
@@ -224,6 +219,20 @@ export function BookingModal({
       setQuoteItems([]);
     }
     setSelectedVehicle(null);
+    setVehicleHistory(null);
+  };
+
+  const handleAddNewVehicle = () => {
+    const newVehicle = {
+      isNew: true,
+      vin: '',
+      year: '',
+      make: '',
+      model: '',
+      plate: '',
+      color: ''
+    };
+    setSelectedVehicle(newVehicle);
     setVehicleHistory(null);
   };
 
@@ -315,8 +324,7 @@ export function BookingModal({
       estimated_total: estimatedTotal,
       notes: formData.notes,
       status: formData.is_on_hold ? 'hold' : 'scheduled',
-      source: 'manual',
-      protractor_updates: Object.keys(contactUpdateFlags).length > 0 ? contactUpdateFlags : null
+      source: 'manual'
     };
 
     try {
@@ -375,8 +383,6 @@ export function BookingModal({
             onSearch={handleSearch}
             onSelectCustomer={handleSelectCustomer}
             onClearCustomer={handleClearCustomer}
-            contactUpdateFlags={contactUpdateFlags}
-            setContactUpdateFlags={setContactUpdateFlags}
           />
 
           <Panel2Vehicles
@@ -385,6 +391,7 @@ export function BookingModal({
             selectedVehicle={selectedVehicle}
             onSelectVehicle={handleSelectVehicle}
             onChangeVehicle={handleChangeVehicle}
+            onAddNewVehicle={handleAddNewVehicle}
             searchTerm={vehicleSearchTerm}
             onSearch={setVehicleSearchTerm}
             disabled={!customer}
@@ -422,7 +429,7 @@ export function BookingModal({
 }
 
 // ============================================
-// PANEL 1: CUSTOMER SEARCH & INFO
+// PANEL 1: CUSTOMER - RESTORED ORIGINAL STYLE
 // ============================================
 
 function Panel1Customer({
@@ -433,12 +440,8 @@ function Panel1Customer({
   loading,
   onSearch,
   onSelectCustomer,
-  onClearCustomer,
-  contactUpdateFlags,
-  setContactUpdateFlags
+  onClearCustomer
 }) {
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-
   if (loading) {
     return (
       <div className="border-r border-gray-200 flex items-center justify-center">
@@ -492,7 +495,7 @@ function Panel1Customer({
         )}
 
         {searchTerm.length >= 2 && searchResults.length === 0 && !searching && (
-          <div className="mt-8 text-center text-gray-500">
+          <div className="mt-4 text-center text-gray-500 py-8">
             <User size={32} className="mx-auto mb-2 opacity-30" />
             <p>No customers found</p>
             <button className="mt-2 text-blue-600 text-sm hover:underline">
@@ -504,94 +507,52 @@ function Panel1Customer({
     );
   }
 
-  const toggleUpdateFlag = (field) => {
-    setContactUpdateFlags(prev => {
-      if (prev[field]) {
-        const { [field]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [field]: true };
-    });
-  };
-
-  const hasUpdateFlags = Object.keys(contactUpdateFlags).length > 0;
-
+  // Customer selected - ORIGINAL STYLE RESTORED
   return (
     <div className="border-r border-gray-200 flex flex-col overflow-hidden">
-      {/* Customer Header */}
-      <div className="p-3 border-b border-gray-200 bg-white flex-shrink-0">
-        <div className="flex items-start justify-between mb-2">
+      {/* Customer Card - Original Style */}
+      <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
+        <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-gray-900">{customer.file_as}</h3>
+              <h3 className="font-bold text-gray-900 text-lg">{customer.file_as}</h3>
               <button
                 onClick={onClearCustomer}
-                className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
                 title="Change customer"
               >
-                <X size={12} />
+                <X size={14} />
               </button>
             </div>
             {customer.company_name && customer.company_name !== customer.file_as && (
               <div className="text-sm text-gray-600 flex items-center gap-1">
-                <Building2 size={11} />
+                <Building2 size={12} />
                 {customer.company_name}
               </div>
             )}
           </div>
-          <button
-            onClick={() => setShowUpdateModal(true)}
-            className={`p-1.5 rounded text-xs flex items-center gap-1 ${
-              hasUpdateFlags 
-                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title="Flag contact info for update"
-          >
-            <Edit size={12} />
-            {hasUpdateFlags && <span>{Object.keys(contactUpdateFlags).length}</span>}
-          </button>
         </div>
 
-        {/* Phone Numbers - All of them */}
         <div className="space-y-1 text-sm">
           {customer.primary_phone && (
             <div className="flex items-center gap-2 text-gray-700">
-              <Phone size={11} className="text-gray-400 flex-shrink-0" />
-              <span className="flex-1">{customer.primary_phone}</span>
-              <span className="text-xs text-gray-400">Primary</span>
-            </div>
-          )}
-          {customer.secondary_phone && (
-            <div className="flex items-center gap-2 text-gray-700">
-              <Phone size={11} className="text-gray-400 flex-shrink-0" />
-              <span className="flex-1">{customer.secondary_phone}</span>
-              <span className="text-xs text-gray-400">Secondary</span>
-            </div>
-          )}
-          {customer.cell_phone && (
-            <div className="flex items-center gap-2 text-gray-700">
-              <Smartphone size={11} className="text-gray-400 flex-shrink-0" />
-              <span className="flex-1">{customer.cell_phone}</span>
-              <span className="text-xs text-gray-400">Cell</span>
-            </div>
-          )}
-          {customer.billing_phone && (
-            <div className="flex items-center gap-2 text-gray-700">
-              <CreditCard size={11} className="text-gray-400 flex-shrink-0" />
-              <span className="flex-1">{customer.billing_phone}</span>
-              <span className="text-xs text-gray-400">Billing</span>
+              <Phone size={12} className="text-gray-400" />
+              <a href={`tel:${customer.primary_phone}`} className="hover:text-blue-600">
+                {customer.primary_phone}
+              </a>
             </div>
           )}
           {customer.email && (
             <div className="flex items-center gap-2 text-gray-700">
-              <Mail size={11} className="text-gray-400 flex-shrink-0" />
-              <span className="truncate flex-1">{customer.email}</span>
+              <Mail size={12} className="text-gray-400" />
+              <a href={`mailto:${customer.email}`} className="hover:text-blue-600 truncate">
+                {customer.email}
+              </a>
             </div>
           )}
           {(customer.street || customer.city) && (
             <div className="flex items-center gap-2 text-gray-600">
-              <MapPin size={11} className="text-gray-400 flex-shrink-0" />
+              <MapPin size={12} className="text-gray-400 flex-shrink-0" />
               <span className="truncate">
                 {[customer.street, customer.city, customer.state].filter(Boolean).join(', ')}
               </span>
@@ -599,84 +560,60 @@ function Panel1Customer({
           )}
         </div>
 
-        {/* Stats Row */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-500">
+        <div className="flex items-center gap-3 mt-3 text-xs">
           {customer.customer_since && (
-            <span>Since <strong className="text-gray-700">{new Date(customer.customer_since).getFullYear()}</strong></span>
+            <span className="text-gray-500">
+              <span className="font-semibold text-gray-700">
+                {new Date(customer.customer_since).getFullYear()}
+              </span> client
+            </span>
           )}
           {customer.lifetime_visits > 0 && (
-            <span><strong className="text-gray-700">{customer.lifetime_visits}</strong> visits</span>
+            <span className="text-gray-500">
+              <span className="font-semibold text-gray-700">{customer.lifetime_visits}</span> visits
+            </span>
           )}
           {customer.lifetime_spent > 0 && (
-            <span><strong className="text-gray-700">${customer.lifetime_spent.toLocaleString()}</strong></span>
-          )}
-          {customer.avg_visit_value > 0 && (
-            <span>Avg: <strong className="text-gray-700">${customer.avg_visit_value.toFixed(0)}</strong></span>
+            <span className="text-gray-500">
+              <span className="font-semibold text-gray-700">
+                ${customer.lifetime_spent.toLocaleString()}
+              </span> total
+            </span>
           )}
         </div>
 
-        {/* Preferences */}
-        <div className="flex flex-wrap gap-1 mt-2">
+        <div className="flex flex-wrap gap-1.5 mt-3">
           {customer.prefers_call && (
-            <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs">📞 Call</span>
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
+              <Phone size={10} /> Call
+            </span>
           )}
           {customer.prefers_text && (
-            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">💬 Text</span>
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs flex items-center gap-1">
+              <MessageSquare size={10} /> Text
+            </span>
           )}
           {customer.prefers_email && (
-            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">✉️ Email</span>
+            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs flex items-center gap-1">
+              <Mail size={10} /> Email
+            </span>
           )}
           {customer.is_supplier && (
-            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Supplier</span>
+            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">
+              Supplier
+            </span>
           )}
         </div>
       </div>
 
-      {/* Shop Notes */}
+      {/* Shop Notes - Original Style */}
       {customer.notes && (
-        <div className="p-2 border-b border-gray-200 bg-amber-50 flex-shrink-0">
-          <div className="text-xs font-medium text-amber-800 mb-0.5 flex items-center gap-1">
-            <AlertTriangle size={10} />
+        <div className="p-3 border-b border-gray-200 bg-amber-50 flex-shrink-0">
+          <div className="text-xs font-medium text-amber-800 mb-1 flex items-center gap-1">
+            <AlertTriangle size={12} />
             Shop Notes
           </div>
-          <div className="text-xs text-amber-900 whitespace-pre-wrap leading-tight">{customer.notes}</div>
-        </div>
-      )}
-
-      {/* Update Flags Display */}
-      {hasUpdateFlags && (
-        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex-shrink-0">
-          <div className="text-xs text-amber-800">
-            <strong>Flagged for update:</strong> {Object.keys(contactUpdateFlags).join(', ')}
-          </div>
-        </div>
-      )}
-
-      {/* Contact Update Modal */}
-      {showUpdateModal && (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-10">
-          <div className="bg-white rounded-lg shadow-xl p-4 w-64">
-            <h4 className="font-medium mb-3">Flag for Update in Protractor</h4>
-            <div className="space-y-2">
-              {['primary_phone', 'secondary_phone', 'cell_phone', 'email', 'address'].map(field => (
-                <label key={field} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={!!contactUpdateFlags[field]}
-                    onChange={() => toggleUpdateFlag(field)}
-                    className="rounded"
-                  />
-                  {field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                </label>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowUpdateModal(false)}
-              className="mt-4 w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-            >
-              Done
-            </button>
-          </div>
+          <div className="text-sm text-amber-900 whitespace-pre-wrap">{customer.notes}</div>
         </div>
       )}
 
@@ -686,7 +623,7 @@ function Panel1Customer({
 }
 
 // ============================================
-// PANEL 2: VEHICLES
+// PANEL 2: VEHICLES - WITH ADD BUTTON, NO EXPAND ITEMS
 // ============================================
 
 function Panel2Vehicles({
@@ -695,6 +632,7 @@ function Panel2Vehicles({
   selectedVehicle,
   onSelectVehicle,
   onChangeVehicle,
+  onAddNewVehicle,
   searchTerm,
   onSearch,
   disabled
@@ -729,9 +667,9 @@ function Panel2Vehicles({
           </div>
           <div className="text-xs text-gray-600 space-y-0.5 mt-1">
             {selectedVehicle.engine && (
-              <div>Engine: {selectedVehicle.engine}</div>
+              <div className="truncate">Engine: {selectedVehicle.engine}</div>
             )}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {selectedVehicle.plate && <span>Plate: <strong>{selectedVehicle.plate}</strong></span>}
               {selectedVehicle.unit_number && <span>Unit: <strong>{selectedVehicle.unit_number}</strong></span>}
               {selectedVehicle.color && <span>{selectedVehicle.color}</span>}
@@ -743,7 +681,61 @@ function Panel2Vehicles({
         </div>
       )}
 
-      {/* Search & Header */}
+      {/* New Vehicle Form */}
+      {selectedVehicle?.isNew && (
+        <div className="p-3 border-b border-gray-200 bg-green-50 flex-shrink-0">
+          <div className="text-xs font-medium text-green-700 mb-2">New Vehicle</div>
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Year"
+              maxLength={4}
+              value={selectedVehicle.year || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, year: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Make"
+              value={selectedVehicle.make || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, make: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Model"
+              value={selectedVehicle.model || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, model: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              placeholder="Plate"
+              value={selectedVehicle.plate || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, plate: e.target.value.toUpperCase() })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
+            />
+            <input
+              type="text"
+              placeholder="VIN"
+              maxLength={17}
+              value={selectedVehicle.vin || ''}
+              onChange={(e) => onSelectVehicle({ ...selectedVehicle, vin: e.target.value.toUpperCase() })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
+            />
+          </div>
+          <button
+            onClick={onChangeVehicle}
+            className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+          >
+            ← Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Search & Header with Add Button */}
       <div className="px-2 py-1.5 bg-gray-100 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -758,10 +750,17 @@ function Panel2Vehicles({
           </div>
           <span className="text-xs text-gray-500">
             {vehicles.length === allVehiclesCount 
-              ? `${vehicles.length} vehicles`
+              ? `${vehicles.length}`
               : `${vehicles.length}/${allVehiclesCount}`
             }
           </span>
+          <button
+            onClick={onAddNewVehicle}
+            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+            title="Add new vehicle"
+          >
+            <Plus size={16} />
+          </button>
         </div>
       </div>
 
@@ -780,6 +779,12 @@ function Panel2Vehicles({
           <div className="text-center text-gray-400 py-8">
             <Car size={24} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No vehicles found</p>
+            <button
+              onClick={onAddNewVehicle}
+              className="mt-2 text-blue-600 text-sm hover:underline"
+            >
+              + Add New Vehicle
+            </button>
           </div>
         )}
       </div>
@@ -788,22 +793,15 @@ function Panel2Vehicles({
 }
 
 // ============================================
-// VEHICLE CARD COMPONENT - Improved
+// VEHICLE CARD - NO EXPANDED ITEMS IN WO LIST
 // ============================================
 
 function VehicleCard({ vehicle, isSelected, onSelect }) {
-  const [expanded, setExpanded] = useState(false);
-
   const getStatusIcon = () => {
     const status = vehicle.service_status;
     if (status === 'overdue') return <span className="text-red-500">🔴</span>;
     if (status === 'due_soon') return <span className="text-amber-500">🟡</span>;
     return <span className="text-green-500">🟢</span>;
-  };
-
-  const toggleExpand = (e) => {
-    e.stopPropagation();
-    setExpanded(!expanded);
   };
 
   return (
@@ -812,19 +810,18 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
         ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
         : 'border-gray-200 hover:border-gray-300 bg-white'
     }`}>
-      {/* Main Card Content */}
       <div className="p-2">
         {/* Header Row */}
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {getStatusIcon()}
-            <span className="font-medium text-sm text-gray-900">
+            <span className="font-medium text-sm text-gray-900 truncate">
               {vehicle.year} {vehicle.make} {vehicle.model}
             </span>
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
-            className={`px-2 py-0.5 text-xs rounded ${
+            className={`px-2 py-0.5 text-xs rounded flex-shrink-0 ml-2 ${
               isSelected 
                 ? 'bg-blue-600 text-white' 
                 : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
@@ -838,7 +835,7 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-600">
           {vehicle.plate && <span>Plate: <strong>{vehicle.plate}</strong></span>}
           {vehicle.unit_number && <span>Unit: <strong>{vehicle.unit_number}</strong></span>}
-          {vehicle.engine && <span className="text-gray-500 truncate max-w-[120px]">{vehicle.engine}</span>}
+          {vehicle.engine && <span className="text-gray-500 truncate max-w-[100px]">{vehicle.engine}</span>}
         </div>
 
         {/* Mileage & Service Row */}
@@ -858,20 +855,18 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
           )}
         </div>
 
-        {/* Last 3 Invoices - Collapsed Headers */}
+        {/* Last 3 Invoices - SIMPLE BARS, NO EXPAND */}
         {vehicle.last_3_invoices?.length > 0 && (
-          <div className="mt-2 border-t border-gray-100 pt-1">
+          <div className="mt-2 border-t border-gray-100 pt-1 space-y-0.5">
             {vehicle.last_3_invoices.slice(0, 3).map((inv, i) => (
-              <InvoiceRow 
-                key={i} 
-                invoice={inv} 
-                expanded={expanded}
-                onToggle={i === 0 ? toggleExpand : undefined}
-                showToggle={i === 0}
-              />
+              <div key={i} className="flex items-center justify-between text-xs py-0.5 px-1 bg-gray-50 rounded">
+                <span className="text-gray-500">{inv.invoice_date}</span>
+                <span className="font-medium">WO# {inv.workorder_number}</span>
+                <span className="font-medium">${inv.grand_total?.toFixed(0)}</span>
+              </div>
             ))}
-            {vehicle.last_3_invoices.some(inv => inv.deferred?.length > 0) && !expanded && (
-              <div className="text-xs text-amber-600 mt-1 pl-4">
+            {vehicle.last_3_invoices.some(inv => inv.deferred?.length > 0) && (
+              <div className="text-xs text-amber-600 pl-1">
                 ⚠️ Has deferred work
               </div>
             )}
@@ -882,46 +877,8 @@ function VehicleCard({ vehicle, isSelected, onSelect }) {
   );
 }
 
-// Invoice Row in Vehicle Card
-function InvoiceRow({ invoice, expanded, onToggle, showToggle }) {
-  return (
-    <div className="text-xs">
-      <div 
-        className={`flex items-center gap-1 py-0.5 ${showToggle ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-        onClick={showToggle ? onToggle : undefined}
-      >
-        {showToggle && (
-          <ChevronRight size={10} className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        )}
-        {!showToggle && <span className="w-2.5" />}
-        <span className="text-gray-500">{invoice.invoice_date}</span>
-        <span className="font-medium">WO# {invoice.workorder_number}</span>
-        <span className="ml-auto font-medium">${invoice.grand_total?.toFixed(0)}</span>
-      </div>
-      
-      {/* Expanded Content */}
-      {expanded && (
-        <div className="pl-4 py-1 space-y-0.5 bg-gray-50 rounded mb-1">
-          {invoice.completed_packages?.slice(0, 5).map((pkg, i) => (
-            <div key={i} className="flex justify-between text-gray-600">
-              <span className="truncate flex-1">{pkg.title}</span>
-              <span>${pkg.total?.toFixed(0)}</span>
-            </div>
-          ))}
-          {invoice.deferred_packages?.filter(p => !p.is_header).map((pkg, i) => (
-            <div key={i} className="flex justify-between text-amber-600">
-              <span className="truncate flex-1">⚠️ {pkg.title}</span>
-              <span>${pkg.total?.toFixed(0)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ============================================
-// PANEL 3: HISTORY & SERVICES (Tabbed)
+// PANEL 3: HISTORY & SERVICES - FIXED SEARCH & TRUNCATION
 // ============================================
 
 function Panel3HistoryServices({
@@ -936,18 +893,22 @@ function Panel3HistoryServices({
   const [expandedInvoices, setExpandedInvoices] = useState({});
   const [collapsedCategories, setCollapsedCategories] = useState({});
 
-  // Group packages by category, favorites first
+  // Group packages: favorites first, then by category
   const groupedPackages = useMemo(() => {
-    const groups = { favorites: [] };
+    const favorites = [];
+    const byCategory = {};
+    
     (servicePackages || []).forEach(pkg => {
       if (pkg.is_favorite) {
-        groups.favorites.push(pkg);
+        favorites.push(pkg);
+      } else {
+        const cat = pkg.category || 'other';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(pkg);
       }
-      const cat = pkg.category || 'other';
-      if (!groups[cat]) groups[cat] = [];
-      if (!pkg.is_favorite) groups[cat].push(pkg);
     });
-    return groups;
+    
+    return { favorites, ...byCategory };
   }, [servicePackages]);
 
   // Initialize collapsed state - favorites open, rest closed
@@ -957,18 +918,21 @@ function Panel3HistoryServices({
       initial[cat] = cat !== 'favorites';
     });
     setCollapsedCategories(initial);
-  }, [groupedPackages]);
+  }, [servicePackages]); // Only on servicePackages change, not groupedPackages
 
-  // Filter history by search
+  // Filter history - SAFELY handle null/undefined
   const filteredInvoices = useMemo(() => {
-    if (!historySearch || !vehicleHistory?.invoices) return vehicleHistory?.invoices || [];
-    const term = historySearch.toLowerCase();
-    return vehicleHistory.invoices.filter(inv =>
-      inv.workorder_number?.toLowerCase().includes(term) ||
-      inv.completed_packages?.some(p => p.title?.toLowerCase().includes(term)) ||
-      inv.deferred_packages?.some(p => p.title?.toLowerCase().includes(term))
-    );
-  }, [vehicleHistory, historySearch]);
+    const invoices = vehicleHistory?.invoices || [];
+    if (!historySearch || !historySearch.trim()) return invoices;
+    
+    const term = historySearch.toLowerCase().trim();
+    return invoices.filter(inv => {
+      if (inv.workorder_number?.toLowerCase().includes(term)) return true;
+      if (inv.completed_packages?.some(p => p.title?.toLowerCase().includes(term))) return true;
+      if (inv.deferred_packages?.some(p => p.title?.toLowerCase().includes(term))) return true;
+      return false;
+    });
+  }, [vehicleHistory?.invoices, historySearch]);
 
   if (disabled) {
     return (
@@ -1037,7 +1001,7 @@ function Panel3HistoryServices({
           {/* Grouped Packages */}
           <div className="p-2 space-y-1">
             {Object.entries(groupedPackages).map(([category, pkgs]) => {
-              if (pkgs.length === 0) return null;
+              if (!pkgs || pkgs.length === 0) return null;
               const isCollapsed = collapsedCategories[category];
               const isFavorites = category === 'favorites';
 
@@ -1069,8 +1033,8 @@ function Panel3HistoryServices({
                           })}
                           className="w-full flex items-center justify-between px-2 py-1.5 text-sm bg-white border border-gray-100 rounded hover:border-blue-300 hover:bg-blue-50"
                         >
-                          <span className="truncate">{pkg.name}</span>
-                          <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0">
+                          <span className="truncate flex-1 text-left">{pkg.name}</span>
+                          <span className="flex items-center gap-2 text-xs text-gray-500 flex-shrink-0 ml-2">
                             <span>${pkg.base_price?.toFixed(0)}</span>
                             <span>{pkg.base_hours}h</span>
                             <Plus size={12} className="text-blue-500" />
@@ -1168,7 +1132,7 @@ function GenericServiceAdder({ onAddToQuote }) {
           value={hours}
           onChange={(e) => setHours(e.target.value)}
           placeholder="Hrs"
-          className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none"
+          className="w-14 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none"
         />
         <input
           type="text"
@@ -1194,7 +1158,7 @@ function GenericServiceAdder({ onAddToQuote }) {
   );
 }
 
-// History Invoice Card
+// History Invoice Card - WITH TRUNCATION
 function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
   const hasDeferred = invoice.deferred_packages?.filter(p => !p.is_header).length > 0;
 
@@ -1206,9 +1170,9 @@ function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
       >
         <ChevronRight 
           size={12} 
-          className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} 
+          className={`text-gray-400 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`} 
         />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="font-medium text-sm">WO# {invoice.workorder_number}</span>
             <span className="text-sm font-medium">${invoice.grand_total?.toFixed(0)}</span>
@@ -1223,15 +1187,15 @@ function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
 
       {expanded && (
         <div className="px-3 pb-2 ml-5 space-y-1">
-          {/* Completed */}
+          {/* Completed - TRUNCATED */}
           {invoice.completed_packages?.map((pkg, i) => (
             <div key={i} className="flex items-center justify-between py-1 text-sm hover:bg-gray-50 rounded px-1">
-              <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Check size={12} className="text-green-500 flex-shrink-0" />
                 <span className="truncate">{pkg.title}</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-gray-500">{pkg.labor_hours}h</span>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <span className="text-xs text-gray-500">{pkg.labor_hours || 1}h</span>
                 <span className="text-gray-600">${pkg.total?.toFixed(0)}</span>
                 <button
                   onClick={(e) => {
@@ -1250,15 +1214,15 @@ function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
             </div>
           ))}
 
-          {/* Deferred */}
+          {/* Deferred - TRUNCATED */}
           {invoice.deferred_packages?.filter(p => !p.is_header).map((pkg, i) => (
             <div key={i} className="flex items-center justify-between py-1 text-sm bg-amber-50 rounded px-1">
-              <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 <AlertTriangle size={12} className="text-amber-500 flex-shrink-0" />
                 <span className="truncate text-amber-800">{pkg.title}</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-amber-600">{pkg.labor_hours}h</span>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <span className="text-xs text-amber-600">{pkg.labor_hours || 1}h</span>
                 <span className="text-amber-700">${pkg.total?.toFixed(0)}</span>
                 <button
                   onClick={(e) => {
@@ -1283,7 +1247,7 @@ function HistoryInvoiceCard({ invoice, expanded, onToggle, onAddToQuote }) {
 }
 
 // ============================================
-// PANEL 4: QUOTE & BOOKING
+// PANEL 4: QUOTE & BOOKING - UNCHANGED
 // ============================================
 
 function Panel4QuoteBooking({
@@ -1344,13 +1308,6 @@ function Panel4QuoteBooking({
                   <div className="font-medium truncate">{item.title}</div>
                   <div className="text-xs text-gray-500">
                     {item.hours}h · ${item.total?.toFixed(0)}
-                    {item.source && (
-                      <span className="ml-1 text-gray-400">
-                        ({item.source === 'history_deferred' ? 'def' : 
-                          item.source === 'history_completed' ? 'prev' : 
-                          item.source === 'generic' ? 'gen' : 'pkg'})
-                      </span>
-                    )}
                   </div>
                 </div>
                 <button
