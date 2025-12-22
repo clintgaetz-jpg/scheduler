@@ -110,17 +110,23 @@ const formatMoney = (amount) => {
 
 // Get weekdays only (Mon-Fri) - NO WEEKENDS
 const getWeekDates = (date) => {
-  const d = new Date(date + 'T12:00:00'); // Noon to avoid timezone issues
+  // Handle both Date objects and date strings
+  let d;
+  if (date instanceof Date) {
+    d = new Date(date);
+  } else {
+    d = new Date(date + 'T12:00:00');
+  }
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
   d.setDate(diff);
   return Array.from({ length: 5 }, (_, i) => {
-    const date = new Date(d);
-    date.setDate(d.getDate() + i);
+    const newDate = new Date(d);
+    newDate.setDate(d.getDate() + i);
     // Format as YYYY-MM-DD without timezone conversion
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const dayOfMonth = String(date.getDate()).padStart(2, '0');
+    const year = newDate.getFullYear();
+    const month = String(newDate.getMonth() + 1).padStart(2, '0');
+    const dayOfMonth = String(newDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${dayOfMonth}`;
   });
 };
