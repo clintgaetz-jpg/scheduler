@@ -570,24 +570,24 @@ export async function bookAppointmentDirect(data) {
 // Get workorder lines for an appointment (with nested parts)
 export async function getWorkorderLines(appointmentId) {
   return supabaseFetch(
-    `workorder_lines?appointment_id=eq.&select=*,parts:workorder_parts(*)&order=rank`
+    `workorder_lines?appointment_id=eq.${appointmentId}&select=*,parts:workorder_parts(*)&order=rank`
   );
 }
 
 // Get workorder lines by WO number (with nested parts)
 export async function getWorkorderLinesByWO(workorderNumber) {
   return supabaseFetch(
-    `workorder_lines?workorder_number=eq.&select=*,parts:workorder_parts(*)&order=rank`
+    `workorder_lines?workorder_number=eq.${workorderNumber}&select=*,parts:workorder_parts(*)&order=rank`
   );
 }
 
-// Update a workorder line (scheduler overrides)
+// Update a workorder line
 export async function updateWorkorderLine(lineId, data) {
-  const res = await fetch(`/rest/v1/workorder_lines?id=eq.`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?id=eq.${lineId}`, {
     method: 'PATCH',
     headers: {
       'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer `,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation'
     },
