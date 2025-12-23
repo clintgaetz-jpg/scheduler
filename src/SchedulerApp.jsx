@@ -9,7 +9,7 @@ import {
 import { BookingModal } from './components/booking/BookingModal';
 import { StatusColumn } from './components/scheduler/StatusColumn';
 import { AppointmentListModal } from './components/scheduler';
-import { AppointmentDetailModal } from './components/appointment-detail';
+import { AppointmentDetailModal } from './components/appointmentdetail';
 import { SettingsView } from './components/SettingsView';
 import { AppointmentCard, CARD_STATUS_COLORS } from './components/scheduler/AppointmentCard';
 
