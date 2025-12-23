@@ -11,6 +11,7 @@ const LINE_STATUS = {
   hold: { label: 'Hold', color: 'text-amber-600', bg: 'bg-amber-100', icon: Pause, border: 'border-amber-200' },
 };
 
+
 export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggleExpand, onUpdate, servicePackages }) {
   const normalizedLine = isWOLine ? {
     title: line.package_title,
@@ -121,3 +122,4 @@ export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggl
     </div>
   );
 }
+
