@@ -31,7 +31,12 @@ export default function ServiceLines({
     setLoading(true);
     setError(null);
     try {
-      const data = await getWorkorderLines(appointment.id);
+      // Try by appointment_id first, then by workorder_number
+      let data = await getWorkorderLines(appointment.id);
+      if ((!data || data.length === 0) && appointment.workorder_number) {
+        console.log('No lines by appt id, trying WO#:', appointment.workorder_number);
+        data = await getWorkorderLinesByWO(appointment.workorder_number);
+      }
       setLines(data || []);
     } catch (err) {
       console.error('Failed to load workorder lines:', err);
