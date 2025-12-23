@@ -506,7 +506,7 @@ export default function AppointmentDetailModal({
       />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-2xl flex flex-col w-[95vw] h-[90vh] max-w-[1400px] overflow-hidden">
+      <div className="relative bg-white rounded-xl shadow-2xl flex flex-col w-[95vw] h-[95vh] overflow-hidden">
         
         {/* ═══════════════════════════════════════════
             HEADER
@@ -532,7 +532,7 @@ export default function AppointmentDetailModal({
               LEFT SIDEBAR - Only show for parent cards
           ───────────────────────────────────────── */}
           {!editedAppointment?.parent_id && (
-            <aside className="w-72 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto">
+            <aside className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto">
               <div className="p-4 space-y-4">
                 
                 {/* Customer Card */}
