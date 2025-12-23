@@ -3,7 +3,7 @@ import {
   Plus, Wrench, Clock, DollarSign, CheckCircle, Pause, AlertCircle, Package, RefreshCw
 } from 'lucide-react';
 import ServiceLine from './ServiceLine';
-import { getWorkorderLines, getWorkorderLinesByWO } from '../../../utils/supabase';
+import { getWorkorderLines, getWorkorderLinesByWO, linkLinesToAppointment } from '../../../utils/supabase';
 
 // ============================================
 // SERVICE LINES - Now queries workorder_lines table
@@ -36,6 +36,14 @@ export default function ServiceLines({
       if ((!data || data.length === 0) && appointment.workorder_number) {
         console.log('No lines by appt id, trying WO#:', appointment.workorder_number);
         data = await getWorkorderLinesByWO(appointment.workorder_number);
+        
+        // If this is the root appt (not a child), link unlinked lines to this appt
+        if (data?.length > 0 && !appointment.parent_appointment_id) {
+          console.log('Linking', data.length, 'lines to appointment', appointment.id);
+          await linkLinesToAppointment(appointment.workorder_number, appointment.id);
+          // Re-fetch by appointment_id now that they're linked
+          data = await getWorkorderLines(appointment.id);
+        }
       }
       setLines(data || []);
     } catch (err) {

@@ -611,3 +611,22 @@ export async function collapseLinesToParent(childAppointmentId, parentAppointmen
     p_parent_appointment_id: parentAppointmentId
   });
 }
+
+
+// Link unlinked lines to an appointment (for initial load)
+export async function linkLinesToAppointment(workorderNumber, appointmentId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?workorder_number=eq.${workorderNumber}&appointment_id=is.null`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify({
+      appointment_id: appointmentId,
+      root_appointment_id: appointmentId
+    })
+  });
+  return res.json();
+}
