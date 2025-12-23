@@ -643,16 +643,22 @@ export default function SchedulerApp() {
       const [childAppointment] = await supabase.insert('appointments', childData);
       if (childAppointment?.id && splitData.lineIds?.length) {
         // Move lines to child appointment
-        const idsStr = splitData.lineIds.map(id => `"${id}"`).join(',');
-        await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?id=in.(${idsStr})`, {
+        const moveUrl = `${SUPABASE_URL}/rest/v1/workorder_lines?id=in.(${splitData.lineIds.join(',')})`;
+        console.log('[Split] PATCH URL:', moveUrl);
+        console.log('[Split] Moving lines:', splitData.lineIds, 'to child:', childAppointment.id);
+        
+        const moveResponse = await fetch(moveUrl, {
           method: 'PATCH',
           headers: {
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
           },
           body: JSON.stringify({ appointment_id: childAppointment.id })
         });
+        const moveResult = await moveResponse.json();
+        console.log('[Split] PATCH status:', moveResponse.status, 'result:', moveResult);
         await supabase.update('appointments', appointment.id, {
           estimated_hours: Math.max(0, (appointment.estimated_hours || 0) - (splitData.totals?.hours || 0)),
           has_children: true
