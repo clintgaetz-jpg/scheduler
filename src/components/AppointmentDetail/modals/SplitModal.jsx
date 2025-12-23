@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Scissors, User, Calendar, Pause, AlertCircle, Package, ArrowRight } from 'lucide-react';
-import { getWorkorderLines } from '../../../utils/supabase';
+import { getWorkorderLines, getWorkorderLinesByWO } from '../../../utils/supabase';
 
 export default function SplitModal({ appointment, technicians = [], onClose, onSplit }) {
   const [lines, setLines] = useState([]);
@@ -16,7 +16,13 @@ export default function SplitModal({ appointment, technicians = [], onClose, onS
 
   const loadLines = async () => {
     setLoading(true); setError(null);
-    try { const data = await getWorkorderLines(appointment.id); setLines(data || []); }
+    try { 
+      let data = await getWorkorderLines(appointment.id);
+      if ((!data || data.length === 0) && appointment.workorder_number) {
+        data = await getWorkorderLinesByWO(appointment.workorder_number);
+      }
+      setLines(data || []); 
+    }
     catch (err) { console.error('Failed:', err); setError('Failed to load lines'); }
     finally { setLoading(false); }
   };
