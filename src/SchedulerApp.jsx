@@ -957,40 +957,7 @@ export default function SchedulerApp() {
       alert('Failed to collapse child card: ' + err.message);
     }
   }}
-  onSplit={async (parentAppt, childApptData) => {
-    try {
-      // DEBUG: Log what we're saving
-      console.log('=== SPLIT DEBUG ===');
-      console.log('Parent WO lines count:', parentAppt.protractor_lines?.length || 0);
-      console.log('Parent services count:', parentAppt.services?.length || 0);
-      console.log('Child WO lines count:', childApptData.protractor_lines?.length || 0);
-      console.log('Child services count:', childApptData.services?.length || 0);
-      console.log('Parent protractor_lines:', JSON.stringify(parentAppt.protractor_lines?.map(l => l.package_title || l.title) || []));
-      console.log('Child protractor_lines:', JSON.stringify(childApptData.protractor_lines?.map(l => l.package_title || l.title) || []));
-      
-      // parentAppt should already have lines removed (from handleSplit in AppointmentDetailModal)
-      // Save the parent first with the updated lines (lines removed)
-      await handleDetailSave(parentAppt);
-      
-      // Create child appointment with the split lines
-      const childResult = await supabase.insert('appointments', childApptData);
-      
-      if (childResult && Array.isArray(childResult) && childResult.length > 0) {
-        const childAppt = childResult[0];
-        
-        // Refresh data to show new child and updated parent
-        await loadAllData();
-        
-        console.log('Split created - Child appointment:', childAppt.id);
-      } else {
-        console.error('Failed to create child appointment:', childResult);
-        alert('Failed to create child appointment');
-      }
-    } catch (err) {
-      console.error('Failed to create split:', err);
-      alert('Failed to create split appointment: ' + err.message);
-    }
-  }}
+  onSplit={handleSplitJob}
   onOpenQuoteBuilder={() => console.log('Open quote builder')}
 />
 
