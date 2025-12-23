@@ -3,7 +3,7 @@ import {
   Plus, Wrench, Clock, DollarSign, CheckCircle, Pause, AlertCircle, Package, RefreshCw
 } from 'lucide-react';
 import ServiceLine, { isLineComplete } from './ServiceLine';
-import { getWorkorderLines, getWorkorderLinesByWO, linkLinesToAppointment } from '../../../utils/supabase';
+import { getWorkorderLines, getWorkorderLinesByWO, linkLinesToAppointment, linkAllLinesToAppointment } from '../../../utils/supabase';
 
 // ============================================
 // SERVICE LINES - Sorted by completion status
@@ -37,21 +37,36 @@ export default function ServiceLines({
         console.log('No lines by appt id, trying WO#:', appointment.workorder_number);
         const allLines = await getWorkorderLinesByWO(appointment.workorder_number);
         console.log('[SL] Got', allLines?.length || 0, 'lines for WO');
-        // Filter by appointment_id - child only sees its lines, parent sees its lines + unlinked
+        
+        // Filter by appointment_id - child only sees its lines
         if (appointment.parent_appointment_id) {
           data = (allLines || []).filter(l => l.appointment_id === appointment.id);
           console.log('[SL] Child filtered to', data.length);
         } else {
-          data = (allLines || []).filter(l => l.appointment_id === appointment.id || !l.appointment_id);
+          // Root appointment: show lines for this appointment OR unlinked lines
+          // If all lines are linked to a DIFFERENT appointment, we still need to see them
+          const myLines = (allLines || []).filter(l => l.appointment_id === appointment.id || !l.appointment_id);
+          
+          if (myLines.length === 0 && allLines?.length > 0) {
+            // Lines exist but are linked elsewhere - take them over for this appointment
+            console.log('[SL] Lines linked elsewhere, re-linking to this appointment');
+            data = allLines;
+          } else {
+            data = myLines;
+          }
           console.log('[SL] Parent has', data.length, 'lines');
         }
         
-        // If this is the root appt (not a child), link unlinked lines to this appt
+        // If this is the root appt (not a child), link lines to this appt
         if (data?.length > 0 && !appointment.parent_appointment_id) {
-          console.log('Linking', data.length, 'lines to appointment', appointment.id);
-          await linkLinesToAppointment(appointment.workorder_number, appointment.id);
-          // Re-fetch by appointment_id now that they're linked
-          data = await getWorkorderLines(appointment.id);
+          const unlinkedCount = data.filter(l => l.appointment_id !== appointment.id).length;
+          if (unlinkedCount > 0) {
+            console.log('Linking', unlinkedCount, 'lines to appointment', appointment.id);
+            // Use linkAllLinesToAppointment to re-link even if they're linked elsewhere
+            await linkAllLinesToAppointment(appointment.workorder_number, appointment.id);
+            // Re-fetch by appointment_id now that they're linked
+            data = await getWorkorderLines(appointment.id);
+          }
         }
       }
       

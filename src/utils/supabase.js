@@ -674,3 +674,21 @@ export async function linkLinesToAppointment(workorderNumber, appointmentId) {
   });
   return res.json();
 }
+
+// Link ALL lines for a workorder to an appointment (for WO-based booking)
+export async function linkAllLinesToAppointment(workorderNumber, appointmentId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?workorder_number=eq.${workorderNumber}`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify({
+      appointment_id: appointmentId,
+      root_appointment_id: appointmentId
+    })
+  });
+  return res.json();
+}

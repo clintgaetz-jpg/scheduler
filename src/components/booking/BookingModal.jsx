@@ -491,7 +491,31 @@ export function BookingModal({
         }
         
         if (Array.isArray(result) && result.length > 0) {
-          onSave && onSave(result[0]);
+          const newAppointment = result[0];
+          
+          // Link all workorder_lines with this WO# to the new appointment
+          try {
+            await fetch(
+              `${SUPABASE_URL}/rest/v1/workorder_lines?workorder_number=eq.${selectedWorkorder.workorder_number}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  appointment_id: newAppointment.id,
+                  root_appointment_id: newAppointment.id
+                })
+              }
+            );
+            console.log('Linked WO lines to appointment:', newAppointment.id);
+          } catch (linkErr) {
+            console.error('Failed to link WO lines:', linkErr);
+          }
+          
+          onSave && onSave(newAppointment);
           onClose();
         }
       } catch (err) {
