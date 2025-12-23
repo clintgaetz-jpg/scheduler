@@ -35,7 +35,16 @@ export default function ServiceLines({
       let data = await getWorkorderLines(appointment.id);
       if ((!data || data.length === 0) && appointment.workorder_number) {
         console.log('No lines by appt id, trying WO#:', appointment.workorder_number);
-        data = await getWorkorderLinesByWO(appointment.workorder_number);
+        const allLines = await getWorkorderLinesByWO(appointment.workorder_number);
+        console.log('[SL] Got', allLines?.length || 0, 'lines for WO');
+        // Filter by appointment_id - child only sees its lines, parent sees its lines + unlinked
+        if (appointment.parent_appointment_id) {
+          data = (allLines || []).filter(l => l.appointment_id === appointment.id);
+          console.log('[SL] Child filtered to', data.length);
+        } else {
+          data = (allLines || []).filter(l => l.appointment_id === appointment.id || !l.appointment_id);
+          console.log('[SL] Parent has', data.length, 'lines');
+        }
         
         // If this is the root appt (not a child), link unlinked lines to this appt
         if (data?.length > 0 && !appointment.parent_appointment_id) {
