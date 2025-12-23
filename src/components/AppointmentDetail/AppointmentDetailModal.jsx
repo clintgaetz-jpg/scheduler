@@ -210,6 +210,13 @@ export default function AppointmentDetailModal({
     const currentAppointment = editedAppointment || appointmentParam;
     if (!currentAppointment?.id) return;
     
+    
+    // NEW: Table-based split when lineIds present
+    if (splitData.lineIds?.length > 0) {
+      console.log('[Split] Table-based with lineIds:', splitData.lineIds);
+      if (onSplit) await onSplit(currentAppointment, splitData);
+      return;
+    }
     try {
       // Get the split lines
       const splitLines = splitData.splitLines || [];
