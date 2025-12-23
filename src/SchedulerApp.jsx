@@ -13,6 +13,7 @@ import { AppointmentDetailModal } from './components/AppointmentDetail';
 import { SettingsView } from './components/SettingsView';
 import { AppointmentCard, CARD_STATUS_COLORS } from './components/scheduler/AppointmentCard';
 
+
 // ============================================
 // SUPABASE CONFIG
 // ============================================
