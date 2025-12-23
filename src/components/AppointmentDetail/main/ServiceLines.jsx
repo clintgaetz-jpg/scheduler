@@ -3,7 +3,7 @@ import {
   Plus, Wrench, Clock, DollarSign, CheckCircle, Pause, AlertCircle, Package, RefreshCw
 } from 'lucide-react';
 import ServiceLine from './ServiceLine';
-import { getWorkorderLines } from '../../../utils/supabase';
+import { getWorkorderLines, getWorkorderLinesByWO } from '../../../utils/supabase';
 
 // ============================================
 // SERVICE LINES - Now queries workorder_lines table
@@ -24,7 +24,7 @@ export default function ServiceLines({
   useEffect(() => {
     if (appointment?.id) loadLines();
     else setLines([]);
-  }, [appointment?.id]);
+  }, [appointment?.id, appointment?.workorder_number]);
 
   const loadLines = async () => {
     if (!appointment?.id) return;
