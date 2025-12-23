@@ -422,6 +422,20 @@ export async function webhookCustomerLookup(phone) {
   return supabaseRpc('webhook_customer_lookup', { p_phone: phone });
 }
 
+// ============================================
+// PARTS INVOICES
+// ============================================
+
+// Get parts invoices for a PO number
+export async function getPartsInvoices(poNumber) {
+  return supabaseRpc('get_parts_invoices', { p_po_number: poNumber });
+}
+
+// Get parts invoices (simple flat list)
+export async function getPartsInvoicesSimple(poNumber) {
+  return supabaseRpc('get_parts_invoices_simple', { p_po_number: poNumber });
+}
+
 // Generate booking group ID
 function generateBookingGroupId() {
   const now = new Date();

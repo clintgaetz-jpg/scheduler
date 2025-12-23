@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, Save, Trash2, Phone, Mail, MapPin, Car, FileText, 
   ChevronDown, ChevronUp, Clock, Package, AlertCircle,
-  CheckCircle, XCircle, RotateCcw, Calendar, User
+  CheckCircle, XCircle, RotateCcw, Calendar, User, Pause
 } from 'lucide-react';
 
 import { AppointmentStatusLEDs } from '../shared/LEDIndicator';
@@ -12,6 +12,8 @@ import ServicesPanel from './ServicesPanel';
 import PartsPanel from './PartsPanel';
 import NotesPanel from './NotesPanel';
 import ActionButtons from './ActionButtons';
+import ServiceLines from './main/ServiceLines';
+import PartsInvoicePanel from './PartsInvoicePanel';
 
 // ============================================
 // APPOINTMENT DETAIL MODAL
@@ -99,15 +101,19 @@ export default function AppointmentDetailModal({
     }
   };
 
-  // Handle status action (arrived, no-show, cancelled)
+  // Handle status action (arrived, no-show, cancelled, completed)
   const handleStatusAction = async (action) => {
     if (!editedAppointment) return;
     
     const updates = {};
     switch (action) {
       case 'arrived':
-        updates.vehicle_here = true;
-        updates.arrived_at = new Date().toISOString();
+        updates.vehicle_here = !editedAppointment.vehicle_here;
+        updates.arrived_at = !editedAppointment.vehicle_here ? new Date().toISOString() : null;
+        break;
+      case 'completed':
+        updates.status = 'completed';
+        updates.completed_at = new Date().toISOString();
         break;
       case 'no_show':
         updates.status = 'no_show';
@@ -119,10 +125,19 @@ export default function AppointmentDetailModal({
         break;
     }
     
+    // Update local state
+    setEditedAppointment(prev => ({ ...prev, ...updates }));
+    setIsDirty(true);
+    
+    // Save to backend
     if (onStatusChange) {
       await onStatusChange(editedAppointment.id, updates);
     }
-    onClose();
+    
+    // Only close for destructive actions
+    if (action === 'cancelled' || action === 'no_show') {
+      onClose();
+    }
   };
 
   // Handle authorize button - prompt for WO#
@@ -165,16 +180,30 @@ export default function AppointmentDetailModal({
                 </span>
               )}
             </p>
-            <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-              {tech && (
-                <span className="flex items-center gap-1">
-                  <User size={14} /> {tech.name}
-                </span>
-              )}
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-4 mt-2 text-sm">
+              {/* Tech Assignment Dropdown */}
+              <div className="flex items-center gap-2">
+                <User size={14} className="text-gray-400" />
+                <select
+                  value={editedAppointment.tech_id || ''}
+                  onChange={(e) => updateField('tech_id', e.target.value || null)}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white font-medium"
+                  style={{ 
+                    backgroundColor: tech?.color ? `${tech.color}15` : 'white',
+                    color: tech?.color || '#374151'
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {technicians?.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <span className="flex items-center gap-1 text-gray-500">
                 <Calendar size={14} /> {editedAppointment.scheduled_date}
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 text-gray-500">
                 <Clock size={14} /> 
                 {timeStats.remainingHours < timeStats.totalHours ? (
                   <span>
@@ -189,8 +218,59 @@ export default function AppointmentDetailModal({
             </div>
           </div>
           
-          {/* LED Status Panel */}
+          {/* Right: Actions + Close */}
           <div className="flex items-start gap-3">
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-2">
+              {/* Mark Arrived */}
+              <button
+                onClick={() => handleStatusAction('arrived')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                  editedAppointment.vehicle_here
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'
+                }`}
+              >
+                <Car size={14} />
+                {editedAppointment.vehicle_here ? 'Arrived' : 'Arrived'}
+              </button>
+
+              {/* Put on Hold */}
+              <button
+                onClick={() => {
+                  const updates = {
+                    is_on_hold: !editedAppointment.is_on_hold,
+                    hold_at: !editedAppointment.is_on_hold ? new Date().toISOString() : null
+                  };
+                  updateField('is_on_hold', updates.is_on_hold);
+                  updateField('hold_at', updates.hold_at);
+                  onStatusChange?.(editedAppointment.id, updates);
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                  editedAppointment.is_on_hold
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700'
+                }`}
+              >
+                <Pause size={14} />
+                {editedAppointment.is_on_hold ? 'Hold' : 'Hold'}
+              </button>
+
+              {/* Mark Complete */}
+              <button
+                onClick={() => handleStatusAction('completed')}
+                disabled={editedAppointment.status === 'completed'}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                  editedAppointment.status === 'completed'
+                    ? 'bg-green-100 text-green-700 cursor-default'
+                    : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'
+                }`}
+              >
+                <CheckCircle size={14} />
+                Complete
+              </button>
+            </div>
+            
             <AppointmentStatusLEDs appointment={editedAppointment} />
             <button 
               onClick={onClose}
@@ -242,18 +322,30 @@ export default function AppointmentDetailModal({
           {/* Right Column - Tab Content */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === 'services' && (
-              <ServicesPanel
+              <ServiceLines
                 appointment={editedAppointment}
                 servicePackages={servicePackages}
+                technicians={technicians}
                 onUpdateLine={updateServiceLine}
-                onAuthorize={handleAuthorize}
+                onAddService={() => {/* TODO: Open quote builder */}}
               />
             )}
             {activeTab === 'parts' && (
-              <PartsPanel
-                appointment={editedAppointment}
-                onUpdate={updateField}
-              />
+              <div className="space-y-4">
+                <PartsPanel
+                  appointment={editedAppointment}
+                  onUpdate={updateField}
+                />
+                {editedAppointment.workorder_number && (
+                  <>
+                    <div className="border-t border-gray-200 my-4" />
+                    <PartsInvoicePanel
+                      appointment={editedAppointment}
+                      onUpdate={updateField}
+                    />
+                  </>
+                )}
+              </div>
             )}
             {activeTab === 'notes' && (
               <NotesPanel

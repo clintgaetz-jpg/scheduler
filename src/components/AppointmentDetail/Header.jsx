@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Phone, ExternalLink, GitBranch } from 'lucide-react';
+import { X, Phone, ExternalLink, GitBranch, User, CheckCircle, Pause, Car, ChevronDown } from 'lucide-react';
 
 // ============================================
 // HEADER
@@ -9,9 +9,12 @@ import { X, Phone, ExternalLink, GitBranch } from 'lucide-react';
 export default function Header({ 
   appointment, 
   tech, 
+  technicians = [],
   isDirty, 
   hasChildren,
-  onClose 
+  onClose,
+  onUpdate,
+  onStatusChange
 }) {
   
   const formatPhone = (phone) => {
@@ -187,23 +190,30 @@ export default function Header({
       </div>
 
       {/* ─────────────────────────────────────────
-          SUB-HEADER: Assignment Info
+          SUB-HEADER: Assignment Info + Actions
       ───────────────────────────────────────── */}
-      <div className="px-4 py-2 bg-gray-50 flex items-center gap-6 text-sm border-t border-gray-100">
-        
-        {/* Tech */}
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500">Tech:</span>
-          <span 
-            className="font-medium px-2 py-0.5 rounded"
-            style={{ 
-              backgroundColor: tech?.color ? `${tech.color}20` : '#f3f4f6',
-              color: tech?.color || '#374151'
-            }}
-          >
-            {tech?.name || 'Unassigned'}
-          </span>
-        </div>
+      <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+        <div className="flex items-center justify-between">
+          {/* Left: Assignment Info */}
+          <div className="flex items-center gap-6 text-sm">
+            {/* Tech Assignment Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">Tech:</span>
+              <select
+                value={appointment.tech_id || ''}
+                onChange={(e) => onUpdate?.('tech_id', e.target.value || null)}
+                className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white font-medium"
+                style={{ 
+                  backgroundColor: tech?.color ? `${tech.color}15` : 'white',
+                  color: tech?.color || '#374151'
+                }}
+              >
+                <option value="">Unassigned</option>
+                {technicians.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
         
         {/* Date */}
         <div className="flex items-center gap-2">
@@ -234,23 +244,67 @@ export default function Header({
           <span className="font-medium">{appointment.estimated_hours || 0}h</span>
         </div>
 
-        {/* Total */}
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500">Est:</span>
-          <span className="font-medium">
-            ${(appointment.estimated_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-        
-        {/* Parent link if child */}
-        {appointment.parent_id && (
-          <div className="flex items-center gap-2 ml-auto text-purple-600">
-            <GitBranch size={14} />
-            <span className="text-sm">Split from parent</span>
-            {/* TODO: Link to parent */}
+            {/* Total */}
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">Est:</span>
+              <span className="font-medium">
+                ${(appointment.estimated_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
-        )}
-        
+
+          {/* Right: Quick Actions */}
+          <div className="flex items-center gap-2">
+            {/* Mark Arrived */}
+            <button
+              onClick={() => onStatusChange?.(appointment.id, { 
+                vehicle_here: !appointment.vehicle_here,
+                arrived_at: !appointment.vehicle_here ? new Date().toISOString() : null
+              })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                appointment.vehicle_here
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'
+              }`}
+            >
+              <Car size={14} />
+              {appointment.vehicle_here ? 'Arrived' : 'Mark Arrived'}
+            </button>
+
+            {/* Put on Hold */}
+            <button
+              onClick={() => onStatusChange?.(appointment.id, { 
+                is_on_hold: !appointment.is_on_hold,
+                hold_at: !appointment.is_on_hold ? new Date().toISOString() : null
+              })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                appointment.is_on_hold
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700'
+              }`}
+            >
+              <Pause size={14} />
+              {appointment.is_on_hold ? 'On Hold' : 'Hold'}
+            </button>
+
+            {/* Mark Complete */}
+            <button
+              onClick={() => onStatusChange?.(appointment.id, { 
+                status: 'completed',
+                completed_at: new Date().toISOString()
+              })}
+              disabled={appointment.status === 'completed'}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                appointment.status === 'completed'
+                  ? 'bg-green-100 text-green-700 cursor-default'
+                  : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'
+              }`}
+            >
+              <CheckCircle size={14} />
+              {appointment.status === 'completed' ? 'Complete' : 'Complete'}
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   );

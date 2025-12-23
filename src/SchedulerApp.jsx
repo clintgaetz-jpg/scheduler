@@ -460,9 +460,43 @@ export default function SchedulerApp() {
     setListModal({ ...listModal, isOpen: false });
   };
 
-  const handleDetailSave = () => {
-    loadAllData();
-    setDetailModal({ isOpen: false, appointment: null });
+  const handleDetailSave = async (editedAppointment) => {
+    if (!editedAppointment?.id) return;
+    
+    try {
+      // Extract only the fields that should be saved (exclude computed/derived fields)
+      const {
+        id,
+        services, // Keep services array
+        ...updateData
+      } = editedAppointment;
+      
+      // Remove any fields that shouldn't be saved directly
+      delete updateData.created_at;
+      delete updateData.updated_at;
+      delete updateData.technicians; // This is a join, not a field
+      
+      // Save to database
+      const result = await supabase.update('appointments', id, {
+        ...updateData,
+        updated_at: new Date().toISOString()
+      });
+      
+      // Update local state
+      setAppointments(prev => prev.map(a => 
+        a.id === id ? { ...a, ...updateData, services } : a
+      ));
+      
+      // Refresh all data to ensure consistency
+      await loadAllData();
+      
+      // Close modal
+      setDetailModal({ isOpen: false, appointment: null });
+    } catch (err) {
+      console.error('Failed to save appointment:', err);
+      alert('Failed to save appointment. Please try again.');
+      throw err; // Re-throw so modal can handle it
+    }
   };
 
  // Toggle occasional tech visibility

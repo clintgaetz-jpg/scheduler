@@ -12,28 +12,49 @@ const LINE_STATUS = {
 };
 
 
-export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggleExpand, onUpdate, servicePackages }) {
+export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggleExpand, onUpdate, servicePackages, technicians = [], appointment }) {
   const normalizedLine = isWOLine ? {
+    id: line.package_id || line.id,
     title: line.package_title,
     description: line.package_description,
     hours: line.labor?.tech_hours || 0,
     total: line.package_total || 0,
     status: line.labor?.completed ? 'done' : (line.status || 'pending'),
+    tech_id: line.tech_id || line.labor?.tech_id || null,
+    scheduled_date: line.scheduled_date || null,
     technician: line.labor?.technician,
     chapter: line.chapter,
     parts: line.parts || [],
     code: line.package_code,
+    parts_status: line.parts_status || 'none',
+    parts_watch_po: line.parts_watch_po || null,
   } : {
+    id: line.id,
     title: line.title,
     description: line.description,
     hours: line.hours || 0,
     total: line.total || 0,
     status: line.status || 'pending',
+    tech_id: line.tech_id || null,
+    scheduled_date: line.scheduled_date || null,
     technician: line.technician,
     chapter: line.chapter || 'Service',
     parts: line.parts || [],
     code: line.code,
+    parts_status: line.parts_status || 'none',
+    parts_watch_po: line.parts_watch_po || null,
   };
+  
+  // Get assigned tech info
+  const assignedTech = normalizedLine.tech_id 
+    ? technicians.find(t => t.id === normalizedLine.tech_id)
+    : null;
+  
+  // Check if assigned to different tech than appointment
+  const isDifferentTech = normalizedLine.tech_id && normalizedLine.tech_id !== appointment?.tech_id;
+  
+  // Check if assigned to different date than appointment
+  const isDifferentDate = normalizedLine.scheduled_date && normalizedLine.scheduled_date !== appointment?.scheduled_date;
 
   const statusConfig = LINE_STATUS[normalizedLine.status] || LINE_STATUS.pending;
   const StatusIcon = statusConfig.icon;
@@ -57,8 +78,17 @@ export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggl
         <GripVertical size={14} className="text-gray-300 flex-shrink-0" />
         <span className="text-sm flex-shrink-0">🔧</span>
         <div className="flex-1 min-w-0">
-          <div className={`font-medium text-sm truncate ${normalizedLine.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-            {normalizedLine.title}
+          <div className="flex items-center gap-2">
+            <div className={`font-medium text-sm truncate ${normalizedLine.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+              {normalizedLine.title}
+            </div>
+            {/* Show badge if assigned to different tech/date */}
+            {(isDifferentTech || isDifferentDate) && (
+              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-semibold rounded">
+                {isDifferentTech && assignedTech ? assignedTech.short_name || assignedTech.name : ''}
+                {isDifferentDate && normalizedLine.scheduled_date ? ` ${new Date(normalizedLine.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+              </span>
+            )}
           </div>
         </div>
         <div className="text-sm text-gray-500 w-14 text-right flex-shrink-0">
@@ -81,21 +111,107 @@ export default function ServiceLine({ line, index, isWOLine, isExpanded, onToggl
       </div>
       
       {isExpanded && (
-        <div className="border-t border-gray-200 p-3 bg-white space-y-3">
+        <div className="border-t border-gray-200 p-4 bg-white space-y-4">
+          {/* Assignment Section - Compact for appointment lines */}
+          {!isWOLine && onUpdate && (
+            <div className="flex items-center gap-2 py-2 border-b border-gray-100">
+              <span className="text-xs text-gray-500 w-16">Assign:</span>
+              <select
+                value={normalizedLine.tech_id || ''}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onUpdate({ tech_id: e.target.value || null });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+              >
+                <option value="">Use appointment tech</option>
+                {technicians && technicians.length > 0 && technicians.map(tech => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name}
+                  </option>
+                ))}
+              </select>
+              {normalizedLine.tech_id && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdate({ tech_id: null, scheduled_date: null });
+                  }}
+                  className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 rounded transition-colors"
+                  title="Clear"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+          {isWOLine && normalizedLine.tech_id && (
+            <div className="text-xs text-gray-500 py-1 border-b border-gray-100">
+              Assigned to: {assignedTech?.name || 'Unknown'} (from Protractor)
+            </div>
+          )}
+          
+          {/* Date Assignment (if different tech) */}
+          {!isWOLine && normalizedLine.tech_id && normalizedLine.tech_id !== appointment?.tech_id && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-16">Date:</span>
+              <input
+                type="date"
+                value={normalizedLine.scheduled_date || appointment?.scheduled_date || ''}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onUpdate({ scheduled_date: e.target.value || null });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                disabled={isWOLine}
+              />
+            </div>
+          )}
+          
+          {/* Status Section */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 w-16">Status:</span>
-            <div className="flex gap-1">
-              {Object.entries(LINE_STATUS).map(([key, config]) => (
-                <button
-                  key={key}
-                  onClick={(e) => { e.stopPropagation(); handleStatusChange(key); }}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${normalizedLine.status === key ? `${config.bg} ${config.color} ring-2 ring-offset-1 ring-current` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                >
-                  {config.label}
-                </button>
-              ))}
-            </div>
+            {isWOLine ? (
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
+                  {statusConfig.label} (Read-only from Protractor)
+                </span>
+                <span className="text-xs text-gray-400 italic">
+                  Status updates must be made in Protractor
+                </span>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                {Object.entries(LINE_STATUS).map(([key, config]) => (
+                  <button
+                    key={key}
+                    onClick={(e) => { e.stopPropagation(); handleStatusChange(key); }}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${normalizedLine.status === key ? `${config.bg} ${config.color} ring-2 ring-offset-1 ring-current` : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                  >
+                    {config.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          
+          {/* Parts Status */}
+          {normalizedLine.parts_status && normalizedLine.parts_status !== 'none' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-16">Parts:</span>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                normalizedLine.parts_status === 'here' ? 'bg-green-100 text-green-700' :
+                normalizedLine.parts_status === 'partial' ? 'bg-yellow-100 text-yellow-700' :
+                normalizedLine.parts_status === 'ordered' ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {normalizedLine.parts_status}
+                {normalizedLine.parts_watch_po && ` (PO: ${normalizedLine.parts_watch_po})`}
+              </span>
+            </div>
+          )}
           {normalizedLine.description && (
             <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">{normalizedLine.description}</div>
           )}

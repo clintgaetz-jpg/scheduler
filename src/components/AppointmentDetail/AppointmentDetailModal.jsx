@@ -12,6 +12,8 @@ import ServiceLines from './main/ServiceLines';
 import NotesSection from './main/NotesSection';
 import SplitModal from './modals/SplitModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
+import HoldManagementModal from './modals/HoldManagementModal';
+import PartsInvoicePanel from './PartsInvoicePanel';
 
 // ============================================
 // APPOINTMENT DETAIL MODAL
@@ -38,6 +40,7 @@ export default function AppointmentDetailModal({
   const [isSaving, setIsSaving] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
 
   // ─────────────────────────────────────────────
   // EFFECTS
@@ -139,14 +142,15 @@ export default function AppointmentDetailModal({
   };
 
   const handlePutOnHold = () => {
-    // If has multiple lines, might want to split first
-    // For now, just put whole thing on hold
-    const updates = {
+    setShowHoldModal(true);
+  };
+
+  const handleConfirmHold = (holdData) => {
+    updateFields({
+      ...holdData,
       status: 'hold',
-      is_on_hold: true,
-      hold_at: new Date().toISOString(),
-    };
-    updateFields(updates);
+    });
+    setShowHoldModal(false);
   };
 
   const handleMarkComplete = async () => {
@@ -216,9 +220,12 @@ export default function AppointmentDetailModal({
         <Header
           appointment={editedAppointment}
           tech={tech}
+          technicians={technicians}
           isDirty={isDirty}
           hasChildren={hasChildren}
           onClose={handleClose}
+          onUpdate={updateField}
+          onStatusChange={onStatusChange}
         />
 
         {/* ═══════════════════════════════════════════
@@ -270,6 +277,16 @@ export default function AppointmentDetailModal({
                 onViewAll={() => {/* TODO: Open invoices panel */}}
               />
               
+              <hr className="border-gray-200" />
+              
+              {/* Parts Invoices */}
+              {editedAppointment.workorder_number && (
+                <PartsInvoicePanel
+                  appointment={editedAppointment}
+                  onUpdate={updateField}
+                />
+              )}
+              
             </div>
           </aside>
 
@@ -283,6 +300,7 @@ export default function AppointmentDetailModal({
               <ServiceLines
                 appointment={editedAppointment}
                 servicePackages={servicePackages}
+                technicians={technicians}
                 onUpdateLine={updateServiceLine}
                 onAddService={onOpenQuoteBuilder}
               />
@@ -435,6 +453,15 @@ export default function AppointmentDetailModal({
         <DeleteConfirmModal
           onConfirm={handleDelete}
           onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {/* Hold Management Modal */}
+      {showHoldModal && (
+        <HoldManagementModal
+          appointment={editedAppointment}
+          onClose={() => setShowHoldModal(false)}
+          onConfirm={handleConfirmHold}
         />
       )}
 
