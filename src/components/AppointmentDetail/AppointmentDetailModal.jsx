@@ -1,13 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Save, Trash2, Car, Pause, Scissors, CheckCircle, RotateCcw, GitBranch } from 'lucide-react';
+import { X, Save, Trash2, Scissors, GitBranch } from 'lucide-react';
 
 // Sub-components
 import Header from './Header';
-import CustomerCard from './sidebar/CustomerCard';
-import VehicleCard from './sidebar/VehicleCard';
-import AssignmentCard from './sidebar/AssignmentCard';
-import StatusChips from './sidebar/StatusChips';
-import InvoicesPreview from './sidebar/InvoicesPreview';
 import ServiceLines from './main/ServiceLines';
 import NotesSection from './main/NotesSection';
 import SplitModal from './modals/SplitModal';
@@ -529,103 +524,38 @@ export default function AppointmentDetailModal({
         <div className="flex-1 flex overflow-hidden">
           
           {/* ─────────────────────────────────────────
-              LEFT SIDEBAR - Only show for parent cards
+              LEFT SIDEBAR - Notes + Parts Invoices
           ───────────────────────────────────────── */}
           {!editedAppointment?.parent_id && (
             <aside className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto">
               <div className="p-4 space-y-4">
                 
-                {/* Customer Card */}
-                <CustomerCard 
-                  appointment={editedAppointment}
-                  onUpdate={updateField}
-                />
+                {/* Notes Section - Display only, from open_workorders */}
+                <NotesSection appointment={editedAppointment} />
                 
-                <hr className="border-gray-200" />
-                
-                {/* Vehicle Card */}
-                <VehicleCard 
-                  appointment={editedAppointment}
-                  onUpdate={updateField}
-                />
-                
-                <hr className="border-gray-200" />
-                
-                {/* Assignment Card */}
-                <AssignmentCard
-                  appointment={editedAppointment}
-                  technicians={technicians}
-                  onUpdate={updateField}
-                />
-                
-                <hr className="border-gray-200" />
-                
-                {/* Status Chips */}
-                <StatusChips 
-                  appointment={editedAppointment}
-                />
-                
-                <hr className="border-gray-200" />
-                
-                {/* Invoices Preview */}
-                <InvoicesPreview
-                  appointment={editedAppointment}
-                  onViewAll={() => {/* TODO: Open invoices panel */}}
-                />
-                
-                <hr className="border-gray-200" />
-                
-                {/* Parts Invoices */}
+                {/* Parts Invoices - Only show when WO assigned */}
                 {editedAppointment.workorder_number && (
-                  <PartsInvoicePanel
-                    appointment={editedAppointment}
-                    onUpdate={updateField}
-                  />
+                  <>
+                    <hr className="border-gray-200" />
+                    <PartsInvoicePanel
+                      appointment={editedAppointment}
+                      onUpdate={updateField}
+                    />
+                  </>
                 )}
                 
               </div>
             </aside>
           )}
           
-          {/* Child Card: Simple info sidebar */}
+          {/* Child Card: Notes sidebar */}
           {editedAppointment?.parent_id && (
             <aside className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto">
               <div className="p-4 space-y-4">
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Work Order</div>
-                  <div className="text-lg font-bold text-gray-900">
-                    {editedAppointment.workorder_number ? `#${editedAppointment.workorder_number}` : 'No W/O'}
-                  </div>
-                </div>
-                <hr className="border-gray-200" />
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Customer</div>
-                  <div className="text-sm font-semibold text-gray-900">{editedAppointment.customer_name}</div>
-                  {editedAppointment.customer_phone && (
-                    <div className="text-xs text-gray-600 mt-1">{editedAppointment.customer_phone}</div>
-                  )}
-                </div>
-                <hr className="border-gray-200" />
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Vehicle</div>
-                  <div className="text-sm text-gray-900">
-                    {editedAppointment.vehicle_description || 
-                     `${editedAppointment.vehicle_year || ''} ${editedAppointment.vehicle_make || ''} ${editedAppointment.vehicle_model || ''}`.trim() ||
-                     'No vehicle'}
-                  </div>
-                </div>
-                <hr className="border-gray-200" />
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Assigned To</div>
-                  <div className="text-sm text-gray-900">
-                    {technicians.find(t => t.id === editedAppointment.tech_id)?.name || 'Unassigned'}
-                  </div>
-                  {editedAppointment.scheduled_date && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      {new Date(editedAppointment.scheduled_date).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
+                
+                {/* Notes Section - Display only, from open_workorders */}
+                <NotesSection appointment={editedAppointment} />
+                
               </div>
             </aside>
           )}
@@ -635,7 +565,7 @@ export default function AppointmentDetailModal({
           ───────────────────────────────────────── */}
           <main className="flex-1 flex flex-col overflow-hidden">
             
-            {/* Service Lines - Scrollable */}
+            {/* Service Lines - Scrollable, full height */}
             <div className="flex-1 overflow-y-auto p-4">
               <ServiceLines
                 appointment={editedAppointment}
@@ -650,14 +580,6 @@ export default function AppointmentDetailModal({
               />
             </div>
             
-            {/* Notes Section - Fixed height at bottom */}
-            <div className="border-t border-gray-200 p-4 bg-gray-50">
-              <NotesSection
-                appointment={editedAppointment}
-                onUpdate={updateField}
-              />
-            </div>
-            
           </main>
         </div>
 
@@ -668,38 +590,6 @@ export default function AppointmentDetailModal({
           
           {/* Primary Actions (Left) */}
           <div className="flex items-center gap-2">
-            
-            {/* Arrived Button */}
-            <button
-              onClick={handleMarkArrived}
-              disabled={editedAppointment.vehicle_here}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
-                ${editedAppointment.vehicle_here
-                  ? 'bg-green-100 text-green-700 cursor-default'
-                  : 'bg-gray-100 text-gray-700 hover:bg-green-50 hover:text-green-700'
-                }
-              `}
-            >
-              <Car size={18} />
-              {editedAppointment.vehicle_here ? 'Arrived ✓' : 'Mark Arrived'}
-            </button>
-
-            {/* Hold Button */}
-            <button
-              onClick={handlePutOnHold}
-              disabled={editedAppointment.is_on_hold}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
-                ${editedAppointment.is_on_hold
-                  ? 'bg-amber-100 text-amber-700 cursor-default'
-                  : 'bg-gray-100 text-gray-700 hover:bg-amber-50 hover:text-amber-700'
-                }
-              `}
-            >
-              <Pause size={18} />
-              {editedAppointment.is_on_hold ? 'On Hold' : 'Put on Hold'}
-            </button>
 
             {/* Card Management Button - Show if has children or is a child */}
             {(hasChildren || editedAppointment.parent_id) && (
@@ -720,28 +610,6 @@ export default function AppointmentDetailModal({
               <Scissors size={18} />
               Split Job
             </button>
-
-            {/* Complete Button */}
-            <button
-              onClick={handleMarkComplete}
-              disabled={editedAppointment?.status === 'completed' || allLinesDone}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
-                ${editedAppointment?.status === 'completed' || allLinesDone
-                  ? 'bg-green-100 text-green-700 cursor-default'
-                  : 'bg-gray-100 text-gray-700 hover:bg-green-50 hover:text-green-700'
-                }
-              `}
-            >
-              <CheckCircle size={18} />
-              {editedAppointment?.status === 'completed' || allLinesDone ? 'Completed ✓' : 'Mark Complete'}
-            </button>
-            {/* Completion Status Indicator */}
-            {allLinesDone && editedAppointment?.status !== 'completed' && (
-              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
-                All Lines Complete
-              </span>
-            )}
             
           </div>
 
@@ -753,17 +621,6 @@ export default function AppointmentDetailModal({
               <span className="text-sm text-amber-600 mr-2">
                 Unsaved changes
               </span>
-            )}
-            
-            {/* Reset Button */}
-            {isDirty && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 transition-all"
-              >
-                <RotateCcw size={16} />
-                Reset
-              </button>
             )}
 
             {/* Delete Button */}

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Wrench, Clock, DollarSign, CheckCircle, Pause, AlertCircle, Package, RefreshCw
 } from 'lucide-react';
-import ServiceLine from './ServiceLine';
+import ServiceLine, { isLineComplete } from './ServiceLine';
 import { getWorkorderLines, getWorkorderLinesByWO, linkLinesToAppointment } from '../../../utils/supabase';
 
 // ============================================
-// SERVICE LINES - Now queries workorder_lines table
+// SERVICE LINES - Sorted by completion status
 // ============================================
 
 export default function ServiceLines({ 
@@ -54,6 +54,26 @@ export default function ServiceLines({
           data = await getWorkorderLines(appointment.id);
         }
       }
+      
+      // FALLBACK: If still no lines from relational tables, use protractor_lines from appointment
+      if ((!data || data.length === 0) && appointment.protractor_lines?.length > 0) {
+        console.log('[SL] Using protractor_lines fallback:', appointment.protractor_lines.length);
+        data = appointment.protractor_lines.map((line, idx) => ({
+          id: line.id || `pline-${idx}`,
+          title: line.title || line.name || line.description || 'Service',
+          description: line.description,
+          code: line.code,
+          labor_hours: line.labor_hours || line.labor?.hours || line.hours || 0,
+          line_total: line.line_total || line.total || line.labor?.total || 0,
+          parts: line.parts || line.labor?.parts || [],
+          protractor_tech_name: line.protractor_tech_name || line.labor?.tech?.name || line.tech_name,
+          protractor_completed: line.protractor_completed ?? line.labor?.completed ?? false,
+          is_warranty_labor: line.is_warranty_labor || (line.labor?.labor_cost < 0),
+          labor: line.labor,
+          rank: idx
+        }));
+      }
+      
       setLines(data || []);
     } catch (err) {
       console.error('Failed to load workorder lines:', err);
@@ -64,10 +84,26 @@ export default function ServiceLines({
     }
   };
 
+  // Split lines into pending and completed
+  const { pendingLines, completedLines } = useMemo(() => {
+    const pending = [];
+    const completed = [];
+    
+    lines.forEach(line => {
+      if (isLineComplete(line)) {
+        completed.push(line);
+      } else {
+        pending.push(line);
+      }
+    });
+    
+    return { pendingLines: pending, completedLines: completed };
+  }, [lines]);
+
   const totals = lines.reduce((acc, line) => {
     acc.hours += parseFloat(line.labor_hours || 0);
     acc.total += parseFloat(line.line_total || 0);
-    if (line.scheduler_status === 'completed') acc.doneCount++;
+    if (isLineComplete(line)) acc.doneCount++;
     if (line.scheduler_status === 'hold') acc.holdCount++;
     if (line.is_warranty_labor) acc.warrantyLaborCount++;
     acc.lineCount++;
@@ -94,6 +130,20 @@ export default function ServiceLines({
     setLines(prev => prev.map(line => line.id === lineId ? { ...line, ...updates } : line));
     if (onUpdateLine) await onUpdateLine(lineId, updates);
   };
+
+  const renderLine = (line, index) => (
+    <ServiceLine
+      key={line.id}
+      line={line}
+      index={index}
+      isExpanded={expandedLines.has(line.id)}
+      onToggleExpand={() => toggleExpand(line.id)}
+      onUpdate={(updates) => handleUpdateLine(line.id, updates)}
+      servicePackages={servicePackages}
+      technicians={technicians}
+      appointment={appointment}
+    />
+  );
 
   return (
     <div className="space-y-4">
@@ -156,32 +206,53 @@ export default function ServiceLines({
         </div>
       )}
 
-      <div className="space-y-2">
-        {!loading && lines.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-            <Wrench size={40} className="mx-auto mb-3 text-gray-300" />
-            <h4 className="font-medium text-gray-700 mb-1">{appointment?.workorder_number ? 'No Service Lines Yet' : 'No Services Scheduled'}</h4>
-            <p className="text-sm text-gray-500 mb-4">{appointment?.workorder_number ? 'Lines will appear when synced from Protractor' : 'Add services to build the estimate'}</p>
-            <button onClick={onAddService} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus size={16} />Add Service
-            </button>
-          </div>
-        ) : (
-          lines.map((line, index) => (
-            <ServiceLine
-              key={line.id}
-              line={line}
-              index={index}
-              isExpanded={expandedLines.has(line.id)}
-              onToggleExpand={() => toggleExpand(line.id)}
-              onUpdate={(updates) => handleUpdateLine(line.id, updates)}
-              servicePackages={servicePackages}
-              technicians={technicians}
-              appointment={appointment}
-            />
-          ))
-        )}
-      </div>
+      {/* ═══════════════════════════════════════════
+          SERVICE LINES - Sorted by status
+      ═══════════════════════════════════════════ */}
+      {!loading && lines.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+          <Wrench size={40} className="mx-auto mb-3 text-gray-300" />
+          <h4 className="font-medium text-gray-700 mb-1">{appointment?.workorder_number ? 'No Service Lines Yet' : 'No Services Scheduled'}</h4>
+          <p className="text-sm text-gray-500 mb-4">{appointment?.workorder_number ? 'Lines will appear when synced from Protractor' : 'Add services to build the estimate'}</p>
+          <button onClick={onAddService} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={16} />Add Service
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* IN PROGRESS Section */}
+          {pendingLines.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <Clock size={14} className="text-gray-500" />
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  In Progress ({pendingLines.length})
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+              <div className="space-y-2">
+                {pendingLines.map(renderLine)}
+              </div>
+            </div>
+          )}
+
+          {/* COMPLETED Section */}
+          {completedLines.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <CheckCircle size={14} className="text-green-500" />
+                <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">
+                  Completed ({completedLines.length})
+                </span>
+                <div className="flex-1 h-px bg-green-200" />
+              </div>
+              <div className="space-y-2">
+                {completedLines.map(renderLine)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {lines.length > 0 && (
         <div className="flex items-center justify-between pt-3 border-t border-gray-200">

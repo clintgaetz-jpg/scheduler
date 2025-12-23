@@ -56,6 +56,12 @@ export function BookingModal({
   const [newCustomer, setNewCustomer] = useState(null); // For new customer form
   const [editingCustomer, setEditingCustomer] = useState(null); // For editing existing customer
 
+  // Workorder search state
+  const [woSearchTerm, setWoSearchTerm] = useState('');
+  const [woSearchResults, setWoSearchResults] = useState([]);
+  const [woSearching, setWoSearching] = useState(false);
+  const [selectedWorkorder, setSelectedWorkorder] = useState(null); // Direct WO booking mode
+
   // Vehicle state
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -89,6 +95,9 @@ export function BookingModal({
       setVehicleHistory(null);
       setQuoteItems([]);
       setVehicleSearchTerm('');
+      setWoSearchTerm('');
+      setWoSearchResults([]);
+      setSelectedWorkorder(null);
       setFormData({
         scheduled_date: selectedDate || new Date().toISOString().split('T')[0],
         tech_id: '',
@@ -97,6 +106,52 @@ export function BookingModal({
       });
     }
   }, [isOpen, selectedDate]);
+
+  // ============================================
+  // WORKORDER SEARCH
+  // ============================================
+
+  const handleWoSearch = async (term) => {
+    setWoSearchTerm(term);
+    if (term.length < 2) {
+      setWoSearchResults([]);
+      return;
+    }
+    
+    setWoSearching(true);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/v_available_workorders?or=(workorder_number.ilike.*${term}*,customer_name.ilike.*${term}*,company_name.ilike.*${term}*)&limit=10`,
+        {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+      const data = await res.json();
+      setWoSearchResults(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('WO Search failed:', err);
+      setWoSearchResults([]);
+    }
+    setWoSearching(false);
+  };
+
+  const handleSelectWorkorder = (wo) => {
+    setSelectedWorkorder(wo);
+    setWoSearchTerm('');
+    setWoSearchResults([]);
+    // Clear customer search stuff
+    setCustomer(null);
+    setNewCustomer(null);
+    setSearchTerm('');
+    setSearchResults([]);
+  };
+
+  const handleClearWorkorder = () => {
+    setSelectedWorkorder(null);
+  };
 
   // ============================================
   // SEARCH & LOAD CUSTOMER
@@ -386,6 +441,69 @@ export function BookingModal({
   // ============================================
 
   const handleSave = async () => {
+    // WORKORDER MODE - Skip customer/vehicle validation
+    if (selectedWorkorder) {
+      if (!formData.is_on_hold && !formData.tech_id) {
+        alert('Please select a technician or save to Hold');
+        return;
+      }
+      
+      setSaving(true);
+      
+      const appointmentData = {
+        source: 'workorder',
+        workorder_number: selectedWorkorder.workorder_number,
+        workorder_created: true,
+        customer_name: selectedWorkorder.customer_name || selectedWorkorder.company_name,
+        company_name: selectedWorkorder.company_name,
+        vehicle_description: selectedWorkorder.vehicle_description,
+        vehicle_vin: selectedWorkorder.vehicle_vin,
+        estimated_total: selectedWorkorder.package_total || 0,
+        estimated_hours: selectedWorkorder.line_count || 1,
+        scheduled_date: formData.is_on_hold ? null : formData.scheduled_date,
+        tech_id: formData.is_on_hold ? null : (formData.tech_id || null),
+        notes: formData.notes || null,
+        status: formData.is_on_hold ? 'hold' : 'scheduled',
+        is_on_hold: formData.is_on_hold || false,
+        hold_reason: formData.is_on_hold ? 'scheduling' : null,
+        hold_at: formData.is_on_hold ? new Date().toISOString() : null
+      };
+      
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(appointmentData)
+        });
+        
+        const result = await res.json();
+        
+        if (!res.ok) {
+          console.error('Save failed:', result);
+          alert(`Failed to save appointment:\n${result.message || result.error || JSON.stringify(result)}`);
+          setSaving(false);
+          return;
+        }
+        
+        if (Array.isArray(result) && result.length > 0) {
+          onSave && onSave(result[0]);
+          onClose();
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        alert(`Failed to save appointment:\n${err.message}`);
+      }
+      
+      setSaving(false);
+      return;
+    }
+    
+    // NORMAL MODE - Customer/Vehicle required
     // Determine which customer data to use
     const customerData = newCustomer?.isNew ? newCustomer : customer;
     
@@ -599,6 +717,13 @@ export function BookingModal({
             onCancelEdit={handleCancelEdit}
             onAddNewCustomer={handleAddNewCustomer}
             onCancelNewCustomer={handleCancelNewCustomer}
+            woSearchTerm={woSearchTerm}
+            woSearchResults={woSearchResults}
+            woSearching={woSearching}
+            selectedWorkorder={selectedWorkorder}
+            onWoSearch={handleWoSearch}
+            onSelectWorkorder={handleSelectWorkorder}
+            onClearWorkorder={handleClearWorkorder}
           />
 
           <Panel2Vehicles
@@ -610,7 +735,8 @@ export function BookingModal({
             onAddNewVehicle={handleAddNewVehicle}
             searchTerm={vehicleSearchTerm}
             onSearch={setVehicleSearchTerm}
-            disabled={!customer && !newCustomer}
+            disabled={(!customer && !newCustomer) || selectedWorkorder}
+            woMode={!!selectedWorkorder}
           />
 
           <Panel3HistoryServices
@@ -618,7 +744,8 @@ export function BookingModal({
             servicePackages={servicePackages}
             loading={historyLoading}
             onAddToQuote={addToQuote}
-            disabled={!selectedVehicle}
+            disabled={!selectedVehicle || selectedWorkorder}
+            woMode={!!selectedWorkorder}
           />
 
           <Panel4QuoteBooking
@@ -636,7 +763,8 @@ export function BookingModal({
             onSave={handleSave}
             onCancel={onClose}
             saving={saving}
-            disabled={!selectedVehicle}
+            disabled={!selectedVehicle && !selectedWorkorder}
+            selectedWorkorder={selectedWorkorder}
           />
         </div>
       </div>
@@ -665,7 +793,14 @@ function Panel1Customer({
   onSaveEdit,
   onCancelEdit,
   onAddNewCustomer,
-  onCancelNewCustomer
+  onCancelNewCustomer,
+  woSearchTerm,
+  woSearchResults,
+  woSearching,
+  selectedWorkorder,
+  onWoSearch,
+  onSelectWorkorder,
+  onClearWorkorder
 }) {
   if (loading) {
     return (
@@ -998,21 +1133,68 @@ function Panel1Customer({
     );
   }
 
-  if (!customer) {
+  // Selected Workorder Mode - Skip customer/vehicle selection
+  if (selectedWorkorder) {
     return (
       <div className="border-r border-gray-200 p-4 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Search Customer
-          </label>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-blue-700">From Work Order</span>
           <button
-            onClick={onAddNewCustomer}
-            className="px-2 py-0.5 text-xs bg-green-600 text-white rounded-full hover:bg-green-700 flex items-center gap-1"
+            onClick={onClearWorkorder}
+            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+            title="Clear"
           >
-            <Plus size={12} />
-            New Customer
+            <X size={14} />
           </button>
         </div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-bold text-blue-800">WO# {selectedWorkorder.workorder_number}</span>
+            <span className="text-xs text-gray-500">{selectedWorkorder.line_count || 0} lines</span>
+          </div>
+          
+          <div className="text-sm font-medium text-gray-900">
+            {selectedWorkorder.customer_name || selectedWorkorder.company_name || 'Unknown Customer'}
+          </div>
+          
+          {selectedWorkorder.vehicle_description && (
+            <div className="text-sm text-gray-600">
+              🚗 {selectedWorkorder.vehicle_description}
+            </div>
+          )}
+          
+          {selectedWorkorder.package_total > 0 && (
+            <div className="text-sm font-semibold text-green-700">
+              ${selectedWorkorder.package_total?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+          )}
+          
+          {selectedWorkorder.promised_date && (
+            <div className="text-xs text-gray-500">
+              Promised: {new Date(selectedWorkorder.promised_date).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+        
+        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="text-xs text-amber-800">
+            <strong>Quick Book Mode:</strong> Select a date and technician in the last panel to book this workorder directly.
+          </div>
+        </div>
+        
+        <div className="flex-1" />
+      </div>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <div className="border-r border-gray-200 p-4 flex flex-col overflow-y-auto">
+        {/* Customer Search */}
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Search Customer
+        </label>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -1031,35 +1213,98 @@ function Panel1Customer({
         </div>
 
         {searchResults.length > 0 && (
-          <div className="mt-2 border border-gray-200 rounded-lg shadow-lg bg-white max-h-[400px] overflow-y-auto">
+          <div className="mt-2 border border-gray-200 rounded-lg shadow-lg bg-white max-h-[200px] overflow-y-auto">
             {searchResults.map((result) => (
               <button
                 key={result.id}
                 onClick={() => onSelectCustomer(result)}
-                className="w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                className="w-full px-4 py-2.5 text-left hover:bg-blue-50 border-b border-gray-100 last:border-0"
               >
-                <div className="font-medium text-gray-900">{result.file_as}</div>
+                <div className="font-medium text-gray-900 text-sm">{result.file_as}</div>
                 {result.company_name && result.company_name !== result.file_as && (
-                  <div className="text-sm text-gray-500">{result.company_name}</div>
+                  <div className="text-xs text-gray-500">{result.company_name}</div>
                 )}
-                <div className="text-sm text-gray-500">{result.primary_phone}</div>
+                <div className="text-xs text-gray-500">{result.primary_phone}</div>
               </button>
             ))}
           </div>
         )}
 
         {searchTerm.length >= 2 && searchResults.length === 0 && !searching && (
-          <div className="mt-4 text-center text-gray-500 py-8">
-            <User size={32} className="mx-auto mb-2 opacity-30" />
-            <p>No customers found</p>
-            <button 
-              onClick={onAddNewCustomer}
-              className="mt-2 text-blue-600 text-sm hover:underline"
-            >
-              + Add New Customer
-            </button>
+          <div className="mt-2 text-center text-gray-500 py-3">
+            <p className="text-sm">No customers found</p>
           </div>
         )}
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 uppercase">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Work Order Search */}
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Search Open Work Orders
+        </label>
+        <div className="relative">
+          <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={woSearchTerm}
+            onChange={(e) => onWoSearch(e.target.value)}
+            placeholder="WO#, customer name..."
+            className="w-full pl-9 pr-4 py-2.5 border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-blue-50"
+          />
+          {woSearching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {woSearchResults.length > 0 && (
+          <div className="mt-2 border border-blue-200 rounded-lg shadow-lg bg-white max-h-[200px] overflow-y-auto">
+            {woSearchResults.map((wo) => (
+              <button
+                key={wo.workorder_number}
+                onClick={() => onSelectWorkorder(wo)}
+                className="w-full px-3 py-2.5 text-left hover:bg-blue-50 border-b border-gray-100 last:border-0"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-700">WO# {wo.workorder_number}</span>
+                  <span className="text-xs text-gray-500">{wo.line_count || 0} lines</span>
+                </div>
+                <div className="text-sm text-gray-900">{wo.customer_name || wo.company_name}</div>
+                {wo.vehicle_description && (
+                  <div className="text-xs text-gray-500 truncate">{wo.vehicle_description}</div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {woSearchTerm.length >= 2 && woSearchResults.length === 0 && !woSearching && (
+          <div className="mt-2 text-center text-gray-500 py-2">
+            <p className="text-xs">No open work orders found</p>
+          </div>
+        )}
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400 uppercase">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* New Customer Button - Bigger */}
+        <button
+          onClick={onAddNewCustomer}
+          className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
+        >
+          <Plus size={18} />
+          New Customer
+        </button>
       </div>
     );
   }
@@ -1205,7 +1450,8 @@ function Panel2Vehicles({
   onAddNewVehicle,
   searchTerm,
   onSearch,
-  disabled
+  disabled,
+  woMode
 }) {
   const [sortBy, setSortBy] = useState('recent'); // recent, overdue, alpha
 
@@ -1243,7 +1489,10 @@ function Panel2Vehicles({
       <div className="border-r border-gray-200 flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-400">
           <Car size={32} className="mx-auto mb-2 opacity-30" />
-          <p>Select a customer first</p>
+          <p>{woMode ? 'Vehicle from WO' : 'Select a customer first'}</p>
+          {woMode && (
+            <p className="text-xs mt-1">Skip to booking →</p>
+          )}
         </div>
       </div>
     );
@@ -1597,7 +1846,8 @@ function Panel3HistoryServices({
   servicePackages,
   loading,
   onAddToQuote,
-  disabled
+  disabled,
+  woMode
 }) {
   const [activeTab, setActiveTab] = useState('services');
   const [historySearch, setHistorySearch] = useState('');
@@ -1690,7 +1940,10 @@ function Panel3HistoryServices({
       <div className="border-r border-gray-200 flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-400">
           <History size={32} className="mx-auto mb-2 opacity-30" />
-          <p>Select a vehicle first</p>
+          <p>{woMode ? 'Services from WO' : 'Select a vehicle first'}</p>
+          {woMode && (
+            <p className="text-xs mt-1">Skip to booking →</p>
+          )}
         </div>
       </div>
     );
@@ -2054,8 +2307,124 @@ function Panel4QuoteBooking({
   onSave,
   onCancel,
   saving,
-  disabled
+  disabled,
+  selectedWorkorder
 }) {
+  // WORKORDER MODE - Simplified booking form
+  if (selectedWorkorder) {
+    return (
+      <div className="flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-3 py-2 bg-blue-100 border-b border-blue-200 flex-shrink-0">
+          <span className="text-sm font-medium text-blue-800">Quick Book from WO</span>
+        </div>
+
+        {/* WO Summary */}
+        <div className="p-4 border-b border-gray-200 bg-blue-50">
+          <div className="text-xl font-bold text-blue-800 mb-2">
+            WO# {selectedWorkorder.workorder_number}
+          </div>
+          <div className="text-sm text-gray-700 mb-1">
+            {selectedWorkorder.customer_name || selectedWorkorder.company_name}
+          </div>
+          {selectedWorkorder.vehicle_description && (
+            <div className="text-sm text-gray-600 mb-2">
+              {selectedWorkorder.vehicle_description}
+            </div>
+          )}
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-gray-600">{selectedWorkorder.line_count || 0} service lines</span>
+            {selectedWorkorder.package_total > 0 && (
+              <span className="font-bold text-green-700">
+                ${selectedWorkorder.package_total?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Booking Form */}
+        <div className="p-4 border-t border-gray-200 space-y-3 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input
+                type="date"
+                value={formData.scheduled_date}
+                onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
+                disabled={formData.is_on_hold}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Technician</label>
+              <select
+                value={formData.tech_id}
+                onChange={(e) => setFormData({ ...formData, tech_id: e.target.value })}
+                disabled={formData.is_on_hold}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100"
+              >
+                <option value="">Select tech...</option>
+                {technicians.map(tech => (
+                  <option key={tech.id} value={tech.id}>{tech.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Appointment notes..."
+              rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+          </div>
+
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.is_on_hold}
+              onChange={(e) => setFormData({ ...formData, is_on_hold: e.target.checked })}
+              className="rounded border-gray-300"
+            />
+            <span className="text-sm text-gray-700">Save to Hold</span>
+          </label>
+        </div>
+
+        {/* Actions */}
+        <div className="p-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="flex-1 px-3 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 text-sm font-medium flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Calendar size={16} />
+                Book WO
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (disabled) {
     return (
       <div className="flex items-center justify-center bg-gray-50">

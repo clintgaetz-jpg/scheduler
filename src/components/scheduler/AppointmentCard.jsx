@@ -1,5 +1,59 @@
 import React, { useMemo } from 'react';
-import { Clock, Wrench, AlertCircle } from 'lucide-react';
+import { Clock, Wrench, AlertCircle, Droplet, Gauge, Car, Disc, Target, Clipboard, Snowflake, Cog, Zap, Settings, Truck, CircleDot } from 'lucide-react';
+
+// ============================================
+// SERVICE ICON COMPONENT
+// ============================================
+const ICON_MAP = {
+  oil: Droplet,
+  diag: Gauge,
+  brakes: Disc,
+  tires: CircleDot,
+  alignment: Target,
+  inspection: Clipboard,
+  ac: Snowflake,
+  maintenance: Cog,
+  electrical: Zap,
+  suspension: Settings,
+  engine: Settings,
+  transmission: Truck,
+  general: Wrench,
+};
+
+export function ServiceIcon({ icon, size = 16, className = '' }) {
+  const IconComponent = ICON_MAP[icon] || Wrench;
+  const color = SERVICE_TYPE_COLORS[icon]?.color || '#6b7280';
+  return <IconComponent size={size} style={{ color }} className={className} />;
+}
+
+// Match service name to icon type
+export function matchServiceToIcon(serviceName, servicePackages = []) {
+  if (!serviceName) return 'general';
+  const name = serviceName.toLowerCase();
+  
+  // Check service packages first
+  const matchedPkg = servicePackages.find(pkg => 
+    pkg.name?.toLowerCase() === name || 
+    pkg.title?.toLowerCase() === name
+  );
+  if (matchedPkg?.icon) return matchedPkg.icon;
+  
+  // Keyword matching
+  if (name.includes('oil') || name.includes('lof') || name.includes('lube')) return 'oil';
+  if (name.includes('diag') || name.includes('scan') || name.includes('check')) return 'diag';
+  if (name.includes('brake') || name.includes('rotor') || name.includes('pad')) return 'brakes';
+  if (name.includes('tire') || name.includes('tyre') || name.includes('rotation')) return 'tires';
+  if (name.includes('align')) return 'alignment';
+  if (name.includes('inspect') || name.includes('safety')) return 'inspection';
+  if (name.includes('a/c') || name.includes('ac ') || name.includes('air con') || name.includes('cool')) return 'ac';
+  if (name.includes('maint') || name.includes('service') || name.includes('tune')) return 'maintenance';
+  if (name.includes('electr') || name.includes('battery') || name.includes('starter')) return 'electrical';
+  if (name.includes('susp') || name.includes('shock') || name.includes('strut')) return 'suspension';
+  if (name.includes('engine') || name.includes('motor')) return 'engine';
+  if (name.includes('trans') || name.includes('clutch')) return 'transmission';
+  
+  return 'general';
+}
 
 // ============================================
 // CONFIGURABLE STATUS COLORS

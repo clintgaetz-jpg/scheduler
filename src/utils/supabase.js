@@ -622,6 +622,41 @@ export async function collapseLinesToParent(childAppointmentId, parentAppointmen
 }
 
 
+// Get available workorders (from v_available_workorders view)
+export async function getAvailableWorkorders(limit = 50) {
+  try {
+    const data = await supabaseFetch(
+      `v_available_workorders?select=workorder_number,customer_name,company_name,vehicle_description,status,line_count,package_total,created_at&order=created_at.desc&limit=${limit}`
+    );
+    // Handle error responses
+    if (data?.error || data?.message || data?.code) {
+      console.warn('getAvailableWorkorders error:', data);
+      return [];
+    }
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error('getAvailableWorkorders failed:', err);
+    return [];
+  }
+}
+
+// Search available workorders
+export async function searchAvailableWorkorders(searchTerm) {
+  if (!searchTerm || searchTerm.length < 2) return [];
+  try {
+    const url = `v_available_workorders?select=workorder_number,customer_name,company_name,vehicle_description,status,line_count,package_total,created_at&or=(workorder_number.ilike.*${searchTerm}*,customer_name.ilike.*${searchTerm}*,company_name.ilike.*${searchTerm}*)&order=created_at.desc&limit=20`;
+    const data = await supabaseFetch(url);
+    if (data?.error || data?.message || data?.code) {
+      console.warn('searchAvailableWorkorders error:', data);
+      return [];
+    }
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error('searchAvailableWorkorders failed:', err);
+    return [];
+  }
+}
+
 // Link unlinked lines to an appointment (for initial load)
 export async function linkLinesToAppointment(workorderNumber, appointmentId) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?workorder_number=eq.${workorderNumber}&appointment_id=is.null`, {

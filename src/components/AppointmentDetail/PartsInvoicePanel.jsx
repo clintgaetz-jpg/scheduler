@@ -1,242 +1,280 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ExternalLink, ChevronDown, ChevronUp, RefreshCw, DollarSign, FileText } from 'lucide-react';
-import { getPartsInvoices } from '../../utils/supabase';
+import { FileText, ExternalLink, RefreshCw, Eye, Package, ChevronDown } from 'lucide-react';
+
+const SUPABASE_URL = 'https://hjhllnczzfqsoekywjpq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M';
 
 // ============================================
-// PARTS INVOICE PANEL
-// Shows invoices for a work order PO number
+// PARTS INVOICE PANEL - Sidebar Version
+// Fetches supplier_invoices from appointments table
 // ============================================
 
 export default function PartsInvoicePanel({ appointment, onUpdate }) {
-  const [invoices, setInvoices] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedInvoice, setExpandedInvoice] = useState(null);
-  const [error, setError] = useState(null);
+  const [viewedInvoices, setViewedInvoices] = useState(new Set());
 
+  // Fetch invoices from database when appointment changes
+  useEffect(() => {
+    if (appointment?.id) {
+      fetchInvoices();
+    }
+  }, [appointment?.id, appointment?.workorder_number]);
+
+  const fetchInvoices = async () => {
+    if (!appointment?.workorder_number) return;
+    setLoading(true);
+    try {
+      // Fetch from appointments table by workorder_number
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/appointments?workorder_number=eq.${appointment.workorder_number}&select=supplier_invoices`,
+        {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+      const data = await res.json();
+      // Find the first appointment with invoices
+      const invoicesData = data?.find(d => d.supplier_invoices?.length > 0)?.supplier_invoices || [];
+      setInvoices(invoicesData);
+    } catch (err) {
+      console.error('Failed to fetch invoices:', err);
+      setInvoices([]);
+    }
+    setLoading(false);
+  };
+
+  // Load viewed state from localStorage
   useEffect(() => {
     if (appointment?.workorder_number) {
-      loadInvoices();
-    } else {
-      setInvoices(null);
+      const key = `viewed_invoices_${appointment.workorder_number}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          setViewedInvoices(new Set(JSON.parse(stored)));
+        } catch (e) {
+          setViewedInvoices(new Set());
+        }
+      }
     }
   }, [appointment?.workorder_number]);
 
-  const loadInvoices = async () => {
-    if (!appointment?.workorder_number) return;
+  const markAsViewed = (invoiceId) => {
+    const newViewed = new Set(viewedInvoices);
+    newViewed.add(invoiceId);
+    setViewedInvoices(newViewed);
     
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getPartsInvoices(appointment.workorder_number);
-      
-      // Handle both single object response and array response
-      if (data && !Array.isArray(data)) {
-        // It's the full response with summary
-        setInvoices(data);
-      } else if (Array.isArray(data)) {
-        // It's just an array of invoices
-        setInvoices({
-          po_number: appointment.workorder_number,
-          summary: {
-            invoice_count: data.length,
-            total_parts_cost: data.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0),
-            suppliers: [...new Set(data.map(inv => inv.supplier_name || inv.vendor).filter(Boolean))]
-          },
-          invoices: data
-        });
-      } else {
-        setInvoices(null);
-      }
-    } catch (err) {
-      console.error('Failed to load parts invoices:', err);
-      setError('Failed to load invoices');
-      setInvoices(null);
-    } finally {
-      setLoading(false);
+    // Persist to localStorage
+    if (appointment?.workorder_number) {
+      const key = `viewed_invoices_${appointment.workorder_number}`;
+      localStorage.setItem(key, JSON.stringify([...newViewed]));
     }
   };
 
-  const toggleInvoice = (invoiceNumber) => {
-    setExpandedInvoice(expandedInvoice === invoiceNumber ? null : invoiceNumber);
+  const markAllAsViewed = () => {
+    const allInvoiceIds = invoices.map(inv => inv.invoice_id || inv.invoice_number).filter(Boolean);
+    const newViewed = new Set([...viewedInvoices, ...allInvoiceIds]);
+    setViewedInvoices(newViewed);
+    
+    // Persist to localStorage
+    if (appointment?.workorder_number) {
+      const key = `viewed_invoices_${appointment.workorder_number}`;
+      localStorage.setItem(key, JSON.stringify([...newViewed]));
+    }
+    
+    // Also update the appointment's invoices_reviewed_at
+    if (onUpdate) {
+      onUpdate('invoices_reviewed_at', new Date().toISOString());
+    }
   };
 
+  const isNew = (invoice) => {
+    const id = invoice.invoice_id || invoice.invoice_number;
+    return !viewedInvoices.has(id);
+  };
+
+  const newCount = invoices.filter(inv => isNew(inv)).length;
+  const totalAmount = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
+
+  // No WO assigned or no invoices
   if (!appointment?.workorder_number) {
-    return (
-      <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
-        No work order number assigned
-      </div>
-    );
+    return null;
   }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-6">
-        <RefreshCw size={20} className="animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-500">Loading invoices...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-        {error}
-        <button onClick={loadInvoices} className="ml-2 text-blue-600 hover:underline">
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!invoices || !invoices.invoices || invoices.invoices.length === 0) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Parts Invoices</span>
-          <button
-            onClick={loadInvoices}
-            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
-          >
-            <RefreshCw size={12} />
-            Refresh
-          </button>
-        </div>
-        <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
-          No invoices found for PO #{appointment.workorder_number}
-        </div>
-      </div>
-    );
-  }
-
-  const { summary, invoices: invoiceList } = invoices;
 
   return (
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Package size={16} className="text-gray-600" />
-          <span className="text-sm font-medium text-gray-700">Parts Invoices</span>
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
-            {summary.invoice_count} invoice{summary.invoice_count !== 1 ? 's' : ''}
-          </span>
-        </div>
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Package size={12} />
+          Parts Invoices
+          {newCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full animate-pulse">
+              {newCount} NEW
+            </span>
+          )}
+        </h3>
         <button
-          onClick={loadInvoices}
-          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+          onClick={fetchInvoices}
+          disabled={loading}
+          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          title="Refresh invoices"
         >
-          <RefreshCw size={12} />
-          Refresh
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <DollarSign size={14} className="text-gray-600" />
-              <span className="font-semibold text-gray-900">
-                ${summary.total_parts_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            {summary.suppliers && summary.suppliers.length > 0 && (
-              <div className="text-gray-600">
-                {summary.suppliers.join(', ')}
-              </div>
-            )}
-          </div>
+      {/* No Invoices */}
+      {invoices.length === 0 && (
+        <div className="text-xs text-gray-400 italic py-2">
+          No invoices for PO #{appointment.workorder_number}
         </div>
-      </div>
+      )}
+
+      {/* Summary Bar */}
+      {invoices.length > 0 && (
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs font-semibold text-gray-900">
+              ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          {newCount > 0 && (
+            <button
+              onClick={markAllAsViewed}
+              className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            >
+              <Eye size={10} />
+              Mark all viewed
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Invoice List */}
-      <div className="space-y-2">
-        {invoiceList.map((invoice, index) => (
-          <div key={invoice.invoice_number || index} className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-colors bg-white">
-            <div className="w-full flex items-center justify-between p-3 cursor-default">
-              <div className="flex-1 text-left">
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-gray-400" />
-                  <span className="font-medium text-sm text-gray-900">
-                    #{invoice.invoice_number || 'Unknown'}
-                  </span>
-                  {invoice.supplier_name && (
-                    <span className="text-xs text-gray-500">
-                      {invoice.supplier_name}
+      {invoices.length > 0 && (
+        <div className="space-y-2">
+          {invoices.map((invoice, index) => {
+            const invoiceId = invoice.invoice_id || invoice.invoice_number || `inv-${index}`;
+            const isNewInvoice = isNew(invoice);
+            const isExpanded = expandedInvoice === invoiceId;
+            const items = invoice.items || [];
+            
+            return (
+              <div 
+                key={invoiceId}
+                className={`rounded-lg border transition-all ${
+                  isNewInvoice 
+                    ? 'bg-green-50 border-green-300' 
+                    : 'bg-white border-gray-200'
+                }`}
+              >
+                {/* Invoice Card */}
+                <div className="p-2.5">
+                  {/* Top Row: Supplier + NEW badge */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-xs text-gray-800 truncate">
+                      {invoice.supplier || 'Unknown Supplier'}
                     </span>
-                  )}
+                    {isNewInvoice && (
+                      <span className="px-1.5 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded">
+                        NEW
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Invoice Number (clickable link) + Total */}
+                  <div className="flex items-center justify-between">
+                    <a
+                      href={invoice.pdf_url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => { if (isNewInvoice) markAsViewed(invoiceId); }}
+                      className="text-blue-600 hover:text-blue-800 hover:underline text-xs font-medium flex items-center gap-1"
+                    >
+                      #{invoice.invoice_number || 'Unknown'}
+                      <ExternalLink size={10} className="opacity-50" />
+                    </a>
+                    <span className="text-sm font-bold text-gray-900">
+                      ${(parseFloat(invoice.total) || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  
+                  {/* Date + Items count + Expand */}
+                  <div className="flex items-center justify-between mt-1.5 text-[10px] text-gray-500">
+                    <span>
+                      {invoice.invoice_date && new Date(invoice.invoice_date).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </span>
+                    {items.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (isNewInvoice) markAsViewed(invoiceId);
+                          setExpandedInvoice(isExpanded ? null : invoiceId);
+                        }}
+                        className="flex items-center gap-1 text-gray-500 hover:text-gray-700"
+                      >
+                        <span>{items.length} item{items.length !== 1 ? 's' : ''}</span>
+                        <ChevronDown 
+                          size={12} 
+                          className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {invoice.invoice_date && new Date(invoice.invoice_date).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-medium text-sm text-gray-900">
-                  ${(parseFloat(invoice.total) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-                {invoice.pdf_url ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      window.open(invoice.pdf_url, '_blank', 'noopener,noreferrer');
-                    }}
-                    className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-md"
-                    title="View PDF in new window"
-                  >
-                    <ExternalLink size={16} />
-                    View PDF
-                  </button>
-                ) : (
-                  <span className="px-3 py-2 text-xs text-gray-400 bg-gray-100 rounded">No PDF Available</span>
-                )}
-                {invoice.items && invoice.items.length > 0 && (
-                  <button
-                    onClick={() => toggleInvoice(invoice.invoice_number || index)}
-                    className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-                    title="Toggle line items"
-                  >
-                    <ChevronDown 
-                      size={16} 
-                      className={`text-gray-400 transition-transform ${expandedInvoice === (invoice.invoice_number || index) ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Expanded Items */}
-            {expandedInvoice === (invoice.invoice_number || index) && invoice.items && invoice.items.length > 0 && (
-              <div className="border-t border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-medium text-gray-700 mb-2">Line Items:</div>
-                <div className="space-y-1">
-                  {invoice.items.map((item, itemIndex) => (
-                    <div key={itemIndex} className="flex items-center gap-3 text-xs bg-white p-2 rounded">
-                      <span className="font-mono text-gray-500 w-24 truncate">
-                        {item.part_number || '-'}
-                      </span>
-                      <span className="flex-1 text-gray-700 truncate">
-                        {item.description || 'No description'}
-                      </span>
-                      <span className="text-gray-500 w-12 text-right">
-                        ×{item.quantity || 1}
-                      </span>
-                      <span className="text-gray-900 w-20 text-right font-medium">
-                        ${(parseFloat(item.line_total) || 0).toFixed(2)}
-                      </span>
+                
+                {/* Expanded Items */}
+                {isExpanded && items.length > 0 && (
+                  <div className="border-t border-gray-200 bg-gray-50 p-2">
+                    <div className="space-y-1">
+                      {items.map((item, itemIndex) => (
+                        <div 
+                          key={itemIndex} 
+                          className="group relative text-[10px] py-1 px-1.5 rounded hover:bg-white transition-colors"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="flex-1 text-gray-700 leading-tight">
+                              {item.description?.split('\n')[0] || 'No description'}
+                            </span>
+                            <span className="text-gray-500 flex-shrink-0">×{item.quantity || 1}</span>
+                            <span className="text-gray-700 font-medium flex-shrink-0 w-12 text-right">
+                              ${(parseFloat(item.line_total) || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          {item.part_number && (
+                            <div className="text-[9px] text-gray-400 font-mono mt-0.5">
+                              {item.part_number}
+                            </div>
+                          )}
+                          {/* Core/Warranty badges */}
+                          {(item.is_core || item.is_warranty) && (
+                            <div className="flex gap-1 mt-1">
+                              {item.is_core && (
+                                <span className="px-1 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-bold rounded">CORE</span>
+                              )}
+                              {item.is_warranty && (
+                                <span className="px-1 py-0.5 bg-purple-100 text-purple-700 text-[8px] font-bold rounded">WTY</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
-

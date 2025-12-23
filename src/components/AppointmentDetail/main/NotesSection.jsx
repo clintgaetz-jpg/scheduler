@@ -1,96 +1,107 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, FileText, Clock, Edit2, Save, ChevronDown } from 'lucide-react';
+import { MessageSquare, FileText, RefreshCw } from 'lucide-react';
 
-export default function NotesSection({ appointment, onUpdate }) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [editingNotes, setEditingNotes] = useState(false);
-  const [notesDraft, setNotesDraft] = useState(appointment?.internal_notes || '');
+// Supabase config
+const SUPABASE_URL = 'https://hjhllnczzfqsoekywjpq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqaGxsbmN6emZxc29la3l3anBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwOTY1MDIsImV4cCI6MjA4MTQ1NjUwMn0.X-gdyOuSYd6MQ_wjUid3CCCl2oiUc43JD2swlNaap7M';
 
+export default function NotesSection({ appointment }) {
+  const [woNotes, setWoNotes] = useState({ advisor_notes: '', notes: '' });
+  const [loading, setLoading] = useState(false);
+
+  // Fetch notes from open_workorders when WO number changes
   useEffect(() => {
-    setNotesDraft(appointment?.internal_notes || '');
-  }, [appointment?.internal_notes]);
+    if (!appointment?.workorder_number) {
+      setWoNotes({ advisor_notes: '', notes: '' });
+      return;
+    }
 
-  const saveNotes = () => {
-    onUpdate('internal_notes', notesDraft);
-    setEditingNotes(false);
-  };
+    const fetchNotes = async () => {
+      setLoading(true);
+      try {
+        const url = `${SUPABASE_URL}/rest/v1/open_workorders?workorder_number=eq.${appointment.workorder_number}&select=advisor_notes,notes`;
+        const res = await fetch(url, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setWoNotes({
+              advisor_notes: data[0].advisor_notes || '',
+              notes: data[0].notes || ''
+            });
+          } else {
+            setWoNotes({ advisor_notes: '', notes: '' });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch WO notes:', err);
+      }
+      setLoading(false);
+    };
 
-  const saNotesPackage = appointment?.protractor_lines?.find(
-    pkg => pkg.package_title === 'Service Advisor Notes' && pkg.chapter === 'Concern'
-  );
-  const combinedSANotes = saNotesPackage?.package_description || appointment?.customer_request || '';
+    fetchNotes();
+  }, [appointment?.workorder_number]);
 
-  const formatTimestamp = (iso) => {
-    if (!iso) return '';
-    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  };
+  // Show nothing if no WO assigned
+  if (!appointment?.workorder_number) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <MessageSquare size={12} />
+          Notes
+        </h3>
+        <div className="text-sm text-gray-400 italic py-2">
+          Assign a W/O to view notes
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center justify-between w-full">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-          <MessageSquare size={12} />Notes & Activity
+          <MessageSquare size={12} />
+          Notes
         </h3>
-        <ChevronDown size={16} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-      </button>
+        {loading && <RefreshCw size={12} className="text-gray-400 animate-spin" />}
+      </div>
 
-      {isExpanded && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-gray-500 flex items-center gap-1">
-              <FileText size={12} />Job Notes
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-gray-700 max-h-32 overflow-y-auto">
-              {combinedSANotes || <span className="text-gray-400 italic">No job notes</span>}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                <MessageSquare size={12} />Internal Notes
-              </div>
-              {!editingNotes && (
-                <button onClick={() => setEditingNotes(true)} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                  <Edit2 size={10} />Edit
-                </button>
-              )}
-            </div>
-            
-            {editingNotes ? (
-              <div className="space-y-2">
-                <textarea
-                  value={notesDraft}
-                  onChange={(e) => setNotesDraft(e.target.value)}
-                  placeholder="Add internal notes..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:border-blue-500 outline-none"
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => { setNotesDraft(appointment?.internal_notes || ''); setEditingNotes(false); }} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded text-xs">Cancel</button>
-                  <button onClick={saveNotes} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 flex items-center gap-1"><Save size={10} />Save</button>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-gray-700 max-h-32 overflow-y-auto cursor-pointer hover:bg-amber-100" onClick={() => setEditingNotes(true)}>
-                {appointment?.internal_notes || <span className="text-gray-400 italic">Click to add notes...</span>}
-              </div>
-            )}
-          </div>
+      {/* Service Advisor Notes */}
+      <div className="space-y-1">
+        <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+          <FileText size={10} />
+          Service Advisor
         </div>
-      )}
-
-      {isExpanded && (
-        <div className="pt-2 border-t border-gray-200">
-          <div className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-2"><Clock size={12} />Activity</div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-            {appointment?.created_at && <span>Created: {formatTimestamp(appointment.created_at)}</span>}
-            {appointment?.arrived_at && <span className="text-green-600">Arrived: {formatTimestamp(appointment.arrived_at)}</span>}
-            {appointment?.completed_at && <span className="text-green-600">Completed: {formatTimestamp(appointment.completed_at)}</span>}
-          </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm text-gray-700 max-h-24 overflow-y-auto">
+          {woNotes.advisor_notes ? (
+            <div className="whitespace-pre-wrap text-xs leading-relaxed">{woNotes.advisor_notes}</div>
+          ) : (
+            <span className="text-gray-400 italic text-xs">No advisor notes</span>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* General Notes */}
+      <div className="space-y-1">
+        <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+          <MessageSquare size={10} />
+          Job Notes
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-sm text-gray-700 max-h-24 overflow-y-auto">
+          {woNotes.notes ? (
+            <div className="whitespace-pre-wrap text-xs leading-relaxed">{woNotes.notes}</div>
+          ) : (
+            <span className="text-gray-400 italic text-xs">No job notes</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
