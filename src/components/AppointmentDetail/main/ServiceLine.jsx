@@ -71,33 +71,6 @@ export default function ServiceLine({ line, index, isExpanded, onToggleExpand, o
       
       {isExpanded && (
         <div className="border-t border-gray-200 p-4 bg-white space-y-4">
-          <div className="flex items-center gap-2 py-2 border-b border-gray-100">
-            <span className="text-xs text-gray-500 w-20">Assign to:</span>
-            <select value={schedulerTechId || ''} onChange={(e) => { e.stopPropagation(); if (onUpdate) onUpdate({ scheduler_tech_id: e.target.value || null }); }} onClick={(e) => e.stopPropagation()} className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none bg-white">
-              <option value="">{protractorTech ? `Protractor: ${protractorTech}` : 'Use appointment tech'}</option>
-              {technicians.map(tech => <option key={tech.id} value={tech.id}>{tech.name}</option>)}
-            </select>
-            {schedulerTechId && <button onClick={(e) => { e.stopPropagation(); if (onUpdate) onUpdate({ scheduler_tech_id: null, scheduler_date: null }); }} className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 rounded" title="Clear">×</button>}
-          </div>
-          
-          {schedulerTechId && schedulerTechId !== appointment?.tech_id && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 w-20">Date:</span>
-              <input type="date" value={line.scheduler_date || appointment?.scheduled_date || ''} onChange={(e) => { e.stopPropagation(); if (onUpdate) onUpdate({ scheduler_date: e.target.value || null }); }} onClick={(e) => e.stopPropagation()} className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-20">Status:</span>
-            <div className="flex gap-1 flex-wrap">
-              {Object.entries(LINE_STATUS).map(([key, config]) => (
-                <button key={key} onClick={(e) => { e.stopPropagation(); handleStatusChange(key); }} disabled={!onUpdate} className={`px-2 py-1 rounded text-xs font-medium transition-colors ${status === key ? `${config.bg} ${config.color} ring-2 ring-offset-1 ring-current` : 'bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-50'}`}>
-                  {config.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          
           {line.description && <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">{line.description}</div>}
           
           {hasParts && (
