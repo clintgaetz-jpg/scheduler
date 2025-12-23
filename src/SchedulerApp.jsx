@@ -8,7 +8,8 @@ import {
 // Component imports
 import { BookingModal } from './components/booking/BookingModal';
 import { StatusColumn } from './components/scheduler/StatusColumn';
-import { AppointmentListModal, AppointmentDetailModal } from './components/scheduler';
+import { AppointmentListModal } from './components/scheduler';
+import { AppointmentDetailModal } from './components/appointment-detail';
 import { SettingsView } from './components/SettingsView';
 import { AppointmentCard, CARD_STATUS_COLORS } from './components/scheduler/AppointmentCard';
 
@@ -784,14 +785,17 @@ export default function SchedulerApp() {
       />
 
       <AppointmentDetailModal
-        isOpen={detailModal.isOpen}
-        onClose={() => setDetailModal({ isOpen: false, appointment: null })}
-        appointment={detailModal.appointment}
-        technicians={technicians}
-        onSave={handleDetailSave}
-        onDelete={handleDeleteAppointment}
-        onStatusChange={() => loadAllData()}
-      />
+  isOpen={detailModal.isOpen}
+  onClose={() => setDetailModal({ isOpen: false, appointment: null })}
+  appointment={detailModal.appointment}
+  technicians={technicians}
+  servicePackages={servicePackages}
+  onSave={handleDetailSave}
+  onDelete={handleDeleteAppointment}
+  onStatusChange={handleUpdateAppointment}
+  onSplit={(appt, splitData) => console.log('Split:', splitData)}
+  onOpenQuoteBuilder={() => console.log('Open quote builder')}
+/>
 
       {/* Day Note Modal */}
       {noteModal.isOpen && (
