@@ -64,6 +64,16 @@ export default function AppointmentDetailModal({
     setIsDirty(true);
   }, []);
 
+  // Handle workorder line updates (for tech assignment, etc.)
+  const updateWOLine = useCallback((index, updates) => {
+    setEditedAppointment(prev => {
+      const protractorLines = [...(prev.protractor_lines || [])];
+      protractorLines[index] = { ...protractorLines[index], ...updates };
+      return { ...prev, protractor_lines: protractorLines };
+    });
+    setIsDirty(true);
+  }, []);
+
   // Calculate time stats
   const getTimeStats = useCallback(() => {
     if (!editedAppointment?.services) {
@@ -327,7 +337,9 @@ export default function AppointmentDetailModal({
                 servicePackages={servicePackages}
                 technicians={technicians}
                 onUpdateLine={updateServiceLine}
+                onUpdateWOLine={updateWOLine}
                 onAddService={() => {/* TODO: Open quote builder */}}
+                onPreferenceChange={updateField}
               />
             )}
             {activeTab === 'parts' && (

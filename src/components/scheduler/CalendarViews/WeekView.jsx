@@ -49,7 +49,9 @@ export default function WeekView({
     return appointments.filter(a => 
       a.tech_id === techId && 
       a.scheduled_date === date &&
-      a.status !== 'cancelled'
+      a.status !== 'cancelled' &&
+      a.status !== 'deleted' &&
+      !a.is_on_hold // Don't show on-hold in week view (they're in the hold column)
     );
   };
 

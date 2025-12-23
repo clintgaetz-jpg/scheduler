@@ -16,10 +16,18 @@ export default function ServiceLines({
   servicePackages, 
   technicians = [],
   onUpdateLine,
-  onAddService 
+  onUpdateWOLine,
+  onAddService,
+  onPreferenceChange,
+  relatedAppointments = [], // For showing which lines are on child cards
+  onManageCards // Callback to open card management
 }) {
   // Reset toggle state when appointment changes
   const [useWOLines, setUseWOLines] = useState(() => {
+    // Check for saved preference first
+    if (appointment?.prefer_wo_lines !== undefined) {
+      return appointment.prefer_wo_lines;
+    }
     // Default to WO lines if they exist, otherwise appointment lines
     const hasWOLines = (appointment?.protractor_lines || []).length > 0;
     return hasWOLines && (appointment?.is_job_mode || false);
@@ -30,10 +38,15 @@ export default function ServiceLines({
   
   // Reset state when appointment changes
   useEffect(() => {
-    const hasWOLines = (appointment?.protractor_lines || []).length > 0;
-    setUseWOLines(hasWOLines && (appointment?.is_job_mode || false));
+    // Check for saved preference first
+    if (appointment?.prefer_wo_lines !== undefined) {
+      setUseWOLines(appointment.prefer_wo_lines);
+    } else {
+      const hasWOLines = (appointment?.protractor_lines || []).length > 0;
+      setUseWOLines(hasWOLines && (appointment?.is_job_mode || false));
+    }
     setExpandedLines(new Set());
-  }, [appointment?.id]);
+  }, [appointment?.id, appointment?.prefer_wo_lines]);
   
   // Handle switching line sources with confirmation
   const handleSwitchRequest = (toWOLines) => {
@@ -50,13 +63,22 @@ export default function ServiceLines({
     } else {
       // No conflict, switch immediately
       setUseWOLines(toWOLines);
+      // Save preference to appointment
+      if (onPreferenceChange) {
+        onPreferenceChange('prefer_wo_lines', toWOLines);
+      }
     }
   };
   
   const confirmSwitch = () => {
-    setUseWOLines(pendingSwitch);
+    const newValue = pendingSwitch;
+    setUseWOLines(newValue);
     setShowSwitchConfirm(false);
     setPendingSwitch(null);
+    // Save preference to appointment
+    if (onPreferenceChange) {
+      onPreferenceChange('prefer_wo_lines', newValue);
+    }
   };
   
   const cancelSwitch = () => {
@@ -68,12 +90,75 @@ export default function ServiceLines({
   const appointmentLines = appointment?.services || [];
   const woLines = appointment?.protractor_lines || [];
   
-  const activeLines = useWOLines ? woLines : appointmentLines;
+  // Check if viewing parent or child card
+  const isParent = appointment && !appointment.parent_id;
+  const isChild = appointment && appointment.parent_id;
+  
+  // Get child cards only if viewing parent
+  const childCards = isParent ? (relatedAppointments || []).filter(a => a && a.parent_id === appointment.id) : [];
+  
+  // Current card's lines - these should be ONLY the lines that belong to THIS card
+  // The split logic now properly removes lines from parent and adds them to child
+  const currentCardLines = useWOLines ? woLines : appointmentLines;
+  
+  // Organize lines into sections
+  let parentNotDoneLines, childCardSections, allCompletedLines;
+  
+  if (isChild) {
+    // ═══════════════════════════════════════════════════════════════
+    // CHILD CARD: Simple view - just show all lines assigned to this child
+    // ═══════════════════════════════════════════════════════════════
+    parentNotDoneLines = currentCardLines;
+    childCardSections = [];
+    allCompletedLines = [];
+  } else {
+    // ═══════════════════════════════════════════════════════════════
+    // PARENT CARD: Show parent's own lines + child card sections
+    // ═══════════════════════════════════════════════════════════════
+    
+    // Parent's not-done lines (these are only lines that belong to parent)
+    parentNotDoneLines = currentCardLines.filter(line => {
+      const status = line.status || (line.labor?.completed ? 'done' : 'pending');
+      return status !== 'done';
+    });
+    
+    // Child card sections - show lines from each child under a header
+    childCardSections = childCards.map(child => {
+      const childLinesArray = useWOLines ? (child.protractor_lines || []) : (child.services || []);
+      return {
+        child,
+        lines: childLinesArray.map(line => ({
+          ...line,
+          _onChildCard: {
+            id: child.id,
+            splitLetter: child.split_letter,
+            techId: child.tech_id,
+            techName: technicians.find(t => t.id === child.tech_id)?.name || 'Unassigned',
+            date: child.scheduled_date,
+            workorderNumber: child.workorder_number
+          }
+        }))
+      };
+    }).filter(section => section.lines.length > 0);
+    
+    // Parent's completed lines
+    allCompletedLines = currentCardLines.filter(line => {
+      const status = line.status || (line.labor?.completed ? 'done' : 'pending');
+      return status === 'done';
+    });
+  }
+  
   const hasWOLines = Array.isArray(woLines) && woLines.length > 0;
   const hasAppointmentLines = Array.isArray(appointmentLines) && appointmentLines.length > 0;
 
-  // Calculate totals
-  const totals = activeLines.reduce((acc, line) => {
+  // Calculate totals from all lines (parent + children)
+  const allLinesForTotals = [
+    ...parentNotDoneLines,
+    ...childCardSections.flatMap(s => s.lines),
+    ...allCompletedLines
+  ];
+  
+  const totals = allLinesForTotals.reduce((acc, line) => {
     // Handle different structures between appointment lines and WO lines
     const hours = parseFloat(line.hours || line.labor?.tech_hours || 0);
     const total = parseFloat(line.total || line.package_total || 0);
@@ -86,6 +171,14 @@ export default function ServiceLines({
     acc.lineCount++;
     return acc;
   }, { hours: 0, total: 0, doneCount: 0, holdCount: 0, lineCount: 0 });
+
+  // Calculate completion percentage
+  const completionPercent = totals.lineCount > 0 
+    ? Math.round((totals.doneCount / totals.lineCount) * 100) 
+    : 0;
+  
+  // Check if all lines are done
+  const allLinesDone = totals.lineCount > 0 && totals.doneCount === totals.lineCount;
 
   // Toggle line expansion
   const toggleExpand = (lineId) => {
@@ -195,37 +288,162 @@ export default function ServiceLines({
       )}
 
       {/* ─────────────────────────────────────────
-          SERVICE LINES LIST
+          SERVICE LINES LIST - ORGANIZED BY SECTION
       ───────────────────────────────────────── */}
-      <div className="space-y-2">
-        {activeLines.length === 0 ? (
+      <div className="space-y-4">
+        {/* Show empty state only if no lines at all */}
+        {parentNotDoneLines.length === 0 && childCardSections.length === 0 && allCompletedLines.length === 0 ? (
           <EmptyState 
             useWOLines={useWOLines} 
             hasWO={!!appointment.workorder_number}
             onAddService={onAddService}
           />
         ) : (
-          activeLines.map((line, index) => (
-            <ServiceLine
-              key={line.id || line.package_id || index}
-              line={line}
-              index={index}
-              isWOLine={useWOLines}
-              isExpanded={expandedLines.has(line.id || line.package_id || index)}
-              onToggleExpand={() => toggleExpand(line.id || line.package_id || index)}
-              onUpdate={useWOLines ? undefined : (updates) => onUpdateLine(index, updates)}
-              servicePackages={servicePackages}
-              technicians={technicians}
-              appointment={appointment}
-            />
-          ))
+          <>
+            {/* Section 1: Parent Card - Not Done Lines */}
+            {isParent && parentNotDoneLines.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-50 border-l-4 border-blue-500 rounded">
+                  <span className="text-sm font-semibold text-blue-900">Parent Card</span>
+                  <span className="text-xs text-blue-600">
+                    ({technicians.find(t => t.id === appointment.tech_id)?.name || 'Unassigned'})
+                  </span>
+                </div>
+                {parentNotDoneLines.map((line, index) => {
+                  const lineIndex = currentCardLines.findIndex(l => 
+                    (l.id && l.id === line.id) || 
+                    (l.package_id && l.package_id === line.package_id) ||
+                    (l === line)
+                  );
+                  return (
+                    <ServiceLine
+                      key={line.id || line.package_id || `parent-${index}`}
+                      line={line}
+                      index={lineIndex >= 0 ? lineIndex : index}
+                      isWOLine={useWOLines}
+                      isExpanded={expandedLines.has(line.id || line.package_id || `parent-${index}`)}
+                      onToggleExpand={() => toggleExpand(line.id || line.package_id || `parent-${index}`)}
+                      onUpdate={useWOLines ? (updates) => onUpdateWOLine(lineIndex >= 0 ? lineIndex : index, updates) : (updates) => onUpdateLine(lineIndex >= 0 ? lineIndex : index, updates)}
+                      servicePackages={servicePackages}
+                      technicians={technicians}
+                      appointment={appointment}
+                      relatedAppointments={relatedAppointments}
+                      onManageCards={onManageCards}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Child Card: Simple view - just show all assigned lines */}
+            {isChild && parentNotDoneLines.length > 0 && (
+              <div className="space-y-2">
+                {parentNotDoneLines.map((line, index) => {
+                  const lineIndex = currentCardLines.findIndex(l => 
+                    (l.id && l.id === line.id) || 
+                    (l.package_id && l.package_id === line.package_id) ||
+                    (l === line)
+                  );
+                  return (
+                    <ServiceLine
+                      key={line.id || line.package_id || `child-${index}`}
+                      line={line}
+                      index={lineIndex >= 0 ? lineIndex : index}
+                      isWOLine={useWOLines}
+                      isExpanded={expandedLines.has(line.id || line.package_id || `child-${index}`)}
+                      onToggleExpand={() => toggleExpand(line.id || line.package_id || `child-${index}`)}
+                      onUpdate={useWOLines ? (updates) => onUpdateWOLine(lineIndex >= 0 ? lineIndex : index, updates) : (updates) => onUpdateLine(lineIndex >= 0 ? lineIndex : index, updates)} // Allow marking done
+                      servicePackages={servicePackages}
+                      technicians={technicians}
+                      appointment={appointment}
+                      relatedAppointments={relatedAppointments}
+                      onManageCards={null} // No manage cards on child
+                      isChildCard={true} // Flag to simplify UI
+                    />
+                  );
+                })}
+              </div>
+            )}
+            
+            {isChild && parentNotDoneLines.length === 0 && (
+              <div className="text-sm text-gray-500 py-4 text-center">
+                No lines assigned to this card
+              </div>
+            )}
+
+            {/* Section 2: Child Cards - Simple header with lines */}
+            {childCardSections.map((section, sectionIdx) => {
+              return (
+                <div key={`child-${section.child.id}`} className="space-y-2">
+                  <div className="px-2 py-1.5 bg-purple-50 border-l-4 border-purple-500 rounded">
+                    <span className="text-sm font-semibold text-purple-900">
+                      On Child Card {section.child.split_letter || '?'} - {section.child.techName || 'Unassigned'}
+                      {section.child.date && ` - ${new Date(section.child.date).toLocaleDateString()}`}
+                    </span>
+                  </div>
+                  {/* All lines from this child (simple list) */}
+                  {section.lines.map((line, lineIdx) => (
+                    <ServiceLine
+                      key={line.id || line.package_id || `child-${section.child.id}-${lineIdx}`}
+                      line={line}
+                      index={lineIdx}
+                      isWOLine={useWOLines}
+                      isExpanded={expandedLines.has(line.id || line.package_id || `child-${section.child.id}-${lineIdx}`)}
+                      onToggleExpand={() => toggleExpand(line.id || line.package_id || `child-${section.child.id}-${lineIdx}`)}
+                      onUpdate={null} // Child card lines are read-only from parent view
+                      servicePackages={servicePackages}
+                      technicians={technicians}
+                      appointment={appointment}
+                      relatedAppointments={relatedAppointments}
+                      onManageCards={onManageCards}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+
+            {/* Section 3: Completed Work (all cards) */}
+            {allCompletedLines.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-2 py-1.5 bg-green-50 border-l-4 border-green-500 rounded">
+                  <CheckCircle size={16} className="text-green-600" />
+                  <span className="text-sm font-semibold text-green-900">Completed Work</span>
+                  <span className="text-xs text-green-600">({allCompletedLines.length} line{allCompletedLines.length !== 1 ? 's' : ''})</span>
+                </div>
+                {allCompletedLines.map((line, index) => {
+                  const isFromChild = line._onChildCard;
+                  const lineIndex = isFromChild ? -1 : currentCardLines.findIndex(l => 
+                    (l.id && l.id === line.id) || 
+                    (l.package_id && l.package_id === line.package_id) ||
+                    (l === line)
+                  );
+                  return (
+                    <ServiceLine
+                      key={line.id || line.package_id || `completed-${index}`}
+                      line={line}
+                      index={lineIndex >= 0 ? lineIndex : index}
+                      isWOLine={useWOLines}
+                      isExpanded={expandedLines.has(line.id || line.package_id || `completed-${index}`)}
+                      onToggleExpand={() => toggleExpand(line.id || line.package_id || `completed-${index}`)}
+                      onUpdate={null} // Completed lines are read-only
+                      servicePackages={servicePackages}
+                      technicians={technicians}
+                      appointment={appointment}
+                      relatedAppointments={relatedAppointments}
+                      onManageCards={onManageCards}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* ─────────────────────────────────────────
           TOTALS ROW
       ───────────────────────────────────────── */}
-      {activeLines.length > 0 && (
+      {allLinesForTotals.length > 0 && (
         <div className="flex items-center justify-between pt-3 border-t border-gray-200">
           
           {/* Line Stats */}
@@ -243,6 +461,17 @@ export default function ServiceLines({
               <span className="flex items-center gap-1 text-amber-600">
                 <Pause size={14} />
                 {totals.holdCount} on hold
+              </span>
+            )}
+            {/* Completion Status */}
+            {allLinesDone && (
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">
+                ALL COMPLETE
+              </span>
+            )}
+            {!allLinesDone && totals.lineCount > 0 && (
+              <span className="text-xs text-gray-500">
+                {completionPercent}% complete
               </span>
             )}
           </div>
@@ -271,11 +500,6 @@ export default function ServiceLines({
             <h3 className="text-lg font-bold text-gray-900 mb-2">Switch Line Source?</h3>
             <p className="text-sm text-gray-600 mb-4">
               You're switching from <strong>{pendingSwitch ? 'Appointment' : 'Work Order'}</strong> lines to <strong>{pendingSwitch ? 'Work Order' : 'Appointment'}</strong> lines.
-              {pendingSwitch && (
-                <span className="block mt-2 text-amber-600">
-                  ⚠️ Work Order lines are read-only from Protractor. You can view them but cannot edit assignments or status.
-                </span>
-              )}
             </p>
             <div className="flex justify-end gap-2">
               <button

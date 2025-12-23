@@ -14,7 +14,8 @@ export default function Header({
   hasChildren,
   onClose,
   onUpdate,
-  onStatusChange
+  onStatusChange,
+  relatedAppointments = [] // For looking up parent's WO number
 }) {
   
   const formatPhone = (phone) => {
@@ -31,12 +32,16 @@ export default function Header({
 
   // Determine header accent color based on status
   const getStatusColor = () => {
+    if (!appointment) return 'border-gray-300';
     if (appointment.status === 'completed') return 'border-green-500';
     if (appointment.is_on_hold) return 'border-amber-500';
     if (appointment.vehicle_here) return 'border-blue-500';
     return 'border-gray-300';
   };
 
+  // Early return if no appointment
+  if (!appointment) return null;
+  
   return (
     <header className={`border-b-2 ${getStatusColor()} bg-white`}>
       <div className="px-4 py-3 flex items-start justify-between gap-4">
@@ -50,11 +55,11 @@ export default function Header({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900 truncate">
-                {appointment.customer_name}
+                {appointment?.customer_name || 'Unknown Customer'}
               </h1>
               
               {/* Parent/Child indicator */}
-              {appointment.parent_id && (
+              {appointment?.parent_id && (
                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded">
                   {appointment.split_letter || 'CHILD'}
                 </span>
@@ -75,14 +80,14 @@ export default function Header({
             </div>
             
             {/* Company name if different */}
-            {appointment.company_name && appointment.company_name !== appointment.customer_name && (
+            {appointment?.company_name && appointment.company_name !== appointment?.customer_name && (
               <div className="text-sm text-gray-500 mt-0.5">
                 {appointment.company_name}
               </div>
             )}
             
             {/* Phone - clickable */}
-            {appointment.customer_phone && (
+            {appointment?.customer_phone && (
               <a 
                 href={`tel:${appointment.customer_phone}`}
                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mt-1"
@@ -127,32 +132,68 @@ export default function Header({
         ───────────────────────────────────────── */}
         <div className="flex items-start gap-4">
           
-          {/* Work Order Info */}
+          {/* Work Order Info - Editable (read-only for child cards) */}
           <div className="text-right">
-            {appointment.workorder_number ? (
-              <>
-                <div className="text-xs text-gray-400 uppercase tracking-wide">Work Order</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-gray-900">
-                    #{appointment.workorder_number}
-                  </span>
-                  {/* Link to Protractor - future */}
-                  {/* <button className="text-gray-400 hover:text-blue-600">
-                    <ExternalLink size={14} />
-                  </button> */}
-                </div>
-                {appointment.workorder_status && (
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {appointment.workorder_status}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-sm text-gray-400 italic">
-                No W/O assigned
+            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Work Order</div>
+            <div className="flex items-center gap-2">
+              {appointment?.parent_id ? (
+                // Child card - read-only, shows parent's WO number
+                (() => {
+                  // Get parent's WO number if child doesn't have one
+                  const parentAppt = Array.isArray(relatedAppointments) 
+                    ? relatedAppointments.find(a => a && a.id === appointment.parent_id)
+                    : null;
+                  const woNumber = appointment.workorder_number || parentAppt?.workorder_number || null;
+                  return (
+                    <span className="text-lg font-bold text-gray-900 px-1 py-0.5 min-w-[100px] text-right">
+                      {woNumber ? `#${woNumber}` : 'No W/O'}
+                    </span>
+                  );
+                })()
+              ) : (
+                // Parent card - editable
+                <input
+                  type="text"
+                  value={appointment.workorder_number || ''}
+                  onChange={(e) => onUpdate?.('workorder_number', e.target.value || null)}
+                  placeholder="Enter WO #"
+                  className="text-lg font-bold text-gray-900 bg-transparent border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none px-1 py-0.5 min-w-[100px] text-right"
+                />
+              )}
+              {/* Link to Protractor - future */}
+              {/* <button className="text-gray-400 hover:text-blue-600">
+                <ExternalLink size={14} />
+              </button> */}
+            </div>
+            {appointment?.workorder_status && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                {appointment.workorder_status}
               </div>
             )}
+            {/* Split indicators */}
+            <div className="flex items-center justify-end gap-1 mt-1">
+              {appointment?.parent_id && (
+                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded">
+                  {appointment.split_letter || 'CHILD'}
+                </span>
+              )}
+              {hasChildren && (
+                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded">
+                  PARENT
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Completion Status */}
+          {hasChildren && (
+            <div className="text-right mb-2">
+              <div className="text-xs text-gray-400 uppercase tracking-wide">Completion</div>
+              <div className="text-sm font-medium text-gray-700">
+                {/* TODO: Calculate from all related cards */}
+              </div>
+            </div>
+          )}
 
           {/* Quick Status Pills */}
           <div className="flex flex-col gap-1">

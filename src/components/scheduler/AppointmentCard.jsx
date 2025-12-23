@@ -180,15 +180,38 @@ export function AppointmentCard({
     >
       {/* Main Content */}
       <div className="p-2.5">
-        {/* Top Row: Customer + Hours */}
+        {/* Top Row: Customer + Hours + WO# */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="flex-1 min-w-0">
-            <div className={`font-semibold text-sm truncate ${statusStyle.text}`}>
-              {appointment.customer_name || 'Unknown Customer'}
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <div className={`font-semibold text-sm truncate ${statusStyle.text}`}>
+                {appointment.customer_name || 'Unknown Customer'}
+              </div>
+              {/* Split indicators */}
+              {appointment.parent_id && (
+                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded flex-shrink-0">
+                  {appointment.split_letter || 'CHILD'}
+                </span>
+              )}
+              {/* Note: has_children would need to be computed from related appointments */}
             </div>
             <div className="text-xs text-gray-500 truncate">
               {appointment.vehicle_description || 'No vehicle'}
             </div>
+            {/* WO # - Prominent display */}
+            {appointment.workorder_number && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="text-xs font-mono font-semibold text-blue-700">
+                  WO #{appointment.workorder_number}
+                </div>
+                {/* Show completion status from Protractor */}
+                {appointment.protractor_lines && Array.isArray(appointment.protractor_lines) && appointment.protractor_lines.length > 0 && (
+                  <div className="text-[10px] text-gray-500">
+                    ({appointment.protractor_lines.filter(l => l?.labor?.completed).length}/{appointment.protractor_lines.length} done)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1">
             <span className={`
@@ -214,11 +237,6 @@ export function AppointmentCard({
           
           {/* Mode indicator */}
           <div className="flex items-center gap-1">
-            {appointment.workorder_number && (
-              <span className="text-[10px] text-gray-400 font-mono">
-                #{appointment.workorder_number}
-              </span>
-            )}
             {!isAppointmentMode && (
               <Wrench size={10} className="text-blue-500" title="Job Mode - Protractor Data" />
             )}

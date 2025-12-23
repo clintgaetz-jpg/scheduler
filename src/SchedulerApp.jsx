@@ -57,6 +57,14 @@ const supabase = {
       },
       body: JSON.stringify(data)
     });
+    
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      console.error(`INSERT ${table} failed:`, res.status, errorBody);
+      // Return error in a way that can be checked
+      return { error: errorBody, status: res.status };
+    }
+    
     return res.json();
   },
   
@@ -71,6 +79,12 @@ const supabase = {
       },
       body: JSON.stringify(data)
     });
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: res.statusText }));
+      return { error };
+    }
+    
     return res.json();
   },
   
@@ -80,6 +94,25 @@ const supabase = {
       status: 'deleted', 
       deleted_at: new Date().toISOString() 
     });
+  },
+  
+  // HARD DELETE - actually removes the record
+  async delete(table, id) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      }
+    });
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(error.message || 'Failed to delete');
+    }
+    
+    return res.json();
   },
   
   async rpc(fn, params = {}) {
@@ -331,7 +364,11 @@ export default function SchedulerApp() {
     }
     
     try {
-      if (editingAppointment) {
+      // If data already has an ID, it was already saved (e.g., by BookingModal)
+      // Just refresh and close, don't save again
+      if (apptData.id) {
+        console.log('Appointment already saved with ID:', apptData.id);
+      } else if (editingAppointment) {
         await supabase.update('appointments', editingAppointment.id, apptData);
       } else {
         await supabase.insert('appointments', apptData);
@@ -352,8 +389,19 @@ export default function SchedulerApp() {
     }
     
     try {
-      await supabase.update('appointments', id, updates);
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+      const result = await supabase.update('appointments', id, updates);
+      
+      // Check if result indicates an error
+      if (result && result.error) {
+        console.error('Failed to update appointment:', result.error);
+        // If column doesn't exist, log it but don't fail completely
+        if (result.error.message && result.error.message.includes('column')) {
+          console.warn('Database column may not exist:', Object.keys(updates)[0]);
+        }
+      } else {
+        // Update local state only if successful
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+      }
     } catch (err) {
       console.error('Failed to update appointment:', err);
     }
@@ -468,6 +516,7 @@ export default function SchedulerApp() {
       const {
         id,
         services, // Keep services array
+        protractor_lines, // Keep protractor_lines array
         ...updateData
       } = editedAppointment;
       
@@ -475,20 +524,66 @@ export default function SchedulerApp() {
       delete updateData.created_at;
       delete updateData.updated_at;
       delete updateData.technicians; // This is a join, not a field
+      delete updateData._onChildCard; // Internal flag, don't save
       
-      // Save to database
-      const result = await supabase.update('appointments', id, {
+      // Prepare data to save - include both services and protractor_lines if they exist
+      const dataToSave = {
         ...updateData,
         updated_at: new Date().toISOString()
-      });
+      };
       
-      // Update local state
-      setAppointments(prev => prev.map(a => 
-        a.id === id ? { ...a, ...updateData, services } : a
-      ));
+      // Include services if they exist
+      if (services !== undefined) {
+        dataToSave.services = services;
+      }
+      
+      // Include protractor_lines if they exist
+      if (protractor_lines !== undefined) {
+        dataToSave.protractor_lines = protractor_lines;
+      }
+      
+      // DEBUG: Log what we're saving
+      console.log('=== handleDetailSave DEBUG ===');
+      console.log('Saving appointment ID:', id);
+      console.log('protractor_lines count:', dataToSave.protractor_lines?.length || 'undefined');
+      console.log('services count:', dataToSave.services?.length || 'undefined');
+      console.log('protractor_lines JSON size:', JSON.stringify(dataToSave.protractor_lines || []).length, 'bytes');
+      
+      // Don't accidentally set status to deleted unless explicitly intended
+      if (dataToSave.status === 'deleted' && !editedAppointment.deleted_at) {
+        // If status is deleted but there's no deleted_at, this might be accidental
+        console.warn('Attempted to set status to deleted without deleted_at - preserving current status');
+        delete dataToSave.status;
+      }
+      
+      // Save to database
+      const result = await supabase.update('appointments', id, dataToSave);
+      
+      // DEBUG: Check what database returned
+      console.log('=== DB UPDATE RESULT ===');
+      console.log('Result:', result);
+      if (result && result[0]) {
+        console.log('Returned protractor_lines count:', result[0].protractor_lines?.length || 'undefined');
+      }
+      
+      // Update local state - include both services and protractor_lines
+      setAppointments(prev => prev.map(a => {
+        if (a.id === id) {
+          const updated = { ...a, ...updateData };
+          if (services !== undefined) updated.services = services;
+          if (protractor_lines !== undefined) updated.protractor_lines = protractor_lines;
+          return updated;
+        }
+        return a;
+      }));
       
       // Refresh all data to ensure consistency
       await loadAllData();
+      
+      // DEBUG: Check what we got after refresh
+      const refreshedAppt = appointments.find(a => a.id === id);
+      console.log('=== AFTER REFRESH ===');
+      console.log('Refreshed protractor_lines count:', refreshedAppt?.protractor_lines?.length || 'not found');
       
       // Close modal
       setDetailModal({ isOpen: false, appointment: null });
@@ -828,7 +923,74 @@ export default function SchedulerApp() {
   onSave={handleDetailSave}
   onDelete={handleDeleteAppointment}
   onStatusChange={handleUpdateAppointment}
-  onSplit={(appt, splitData) => console.log('Split:', splitData)}
+  onQuickUpdate={handleUpdateAppointment}
+  onCollapseChild={async (childId, childLines, isWOLines) => {
+    try {
+      // Get the parent appointment
+      const childAppt = appointments.find(a => a.id === childId);
+      if (!childAppt || !childAppt.parent_id) {
+        console.error('Child card not found or has no parent');
+        return;
+      }
+      
+      const parentAppt = appointments.find(a => a.id === childAppt.parent_id);
+      if (!parentAppt) {
+        console.error('Parent appointment not found');
+        return;
+      }
+      
+      // Merge lines back to parent
+      const parentUpdate = isWOLines
+        ? { protractor_lines: [...(parentAppt.protractor_lines || []), ...childLines] }
+        : { services: [...(parentAppt.services || []), ...childLines] };
+      
+      // Update parent with merged lines
+      await supabase.update('appointments', parentAppt.id, parentUpdate);
+      
+      // Actually delete the child card (hard delete, not soft delete)
+      await supabase.delete('appointments', childId);
+      
+      // Refresh data
+      await loadAllData();
+    } catch (err) {
+      console.error('Failed to collapse child card:', err);
+      alert('Failed to collapse child card: ' + err.message);
+    }
+  }}
+  onSplit={async (parentAppt, childApptData) => {
+    try {
+      // DEBUG: Log what we're saving
+      console.log('=== SPLIT DEBUG ===');
+      console.log('Parent WO lines count:', parentAppt.protractor_lines?.length || 0);
+      console.log('Parent services count:', parentAppt.services?.length || 0);
+      console.log('Child WO lines count:', childApptData.protractor_lines?.length || 0);
+      console.log('Child services count:', childApptData.services?.length || 0);
+      console.log('Parent protractor_lines:', JSON.stringify(parentAppt.protractor_lines?.map(l => l.package_title || l.title) || []));
+      console.log('Child protractor_lines:', JSON.stringify(childApptData.protractor_lines?.map(l => l.package_title || l.title) || []));
+      
+      // parentAppt should already have lines removed (from handleSplit in AppointmentDetailModal)
+      // Save the parent first with the updated lines (lines removed)
+      await handleDetailSave(parentAppt);
+      
+      // Create child appointment with the split lines
+      const childResult = await supabase.insert('appointments', childApptData);
+      
+      if (childResult && Array.isArray(childResult) && childResult.length > 0) {
+        const childAppt = childResult[0];
+        
+        // Refresh data to show new child and updated parent
+        await loadAllData();
+        
+        console.log('Split created - Child appointment:', childAppt.id);
+      } else {
+        console.error('Failed to create child appointment:', childResult);
+        alert('Failed to create child appointment');
+      }
+    } catch (err) {
+      console.error('Failed to create split:', err);
+      alert('Failed to create split appointment: ' + err.message);
+    }
+  }}
   onOpenQuoteBuilder={() => console.log('Open quote builder')}
 />
 
