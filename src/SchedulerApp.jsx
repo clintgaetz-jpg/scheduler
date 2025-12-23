@@ -613,6 +613,52 @@ export default function SchedulerApp() {
     }));
   };
 
+
+  // Handle splitting lines to a new child appointment
+  const handleSplitJob = async (appointment, splitData) => {
+    console.log('Splitting job:', { appointment, splitData });
+    try {
+      const childData = {
+        customer_id: appointment.customer_id,
+        customer_name: appointment.customer_name,
+        vehicle_id: appointment.vehicle_id,
+        vehicle_year: appointment.vehicle_year,
+        vehicle_make: appointment.vehicle_make,
+        vehicle_model: appointment.vehicle_model,
+        vehicle_vin: appointment.vehicle_vin,
+        vehicle_plate: appointment.vehicle_plate,
+        vehicle_mileage: appointment.vehicle_mileage,
+        workorder_number: appointment.workorder_number,
+        parent_appointment_id: appointment.id,
+        tech_id: splitData.splitType === 'tech' ? splitData.splitTech : appointment.tech_id,
+        scheduled_date: splitData.splitDate || appointment.scheduled_date,
+        time_slot: appointment.time_slot || 'am',
+        status: splitData.splitType === 'hold' ? 'on_hold' : 'scheduled',
+        hold_reason: splitData.holdReason || null,
+        estimated_hours: splitData.totals?.hours || 0,
+        estimated_total: splitData.totals?.total || 0,
+        source: 'split',
+        notes: 'Split from appointment ' + appointment.id
+      };
+      const [childAppointment] = await supabase.insert('appointments', childData);
+      if (childAppointment?.id && splitData.lineIds?.length) {
+        await supabase.rpc('move_lines_to_appointment', {
+          p_line_ids: splitData.lineIds,
+          p_target_appointment_id: childAppointment.id
+        });
+        await supabase.update('appointments', appointment.id, {
+          estimated_hours: Math.max(0, (appointment.estimated_hours || 0) - (splitData.totals?.hours || 0)),
+          has_children: true
+        });
+      }
+      await loadAllData();
+      alert('Successfully split lines!');
+    } catch (err) {
+      console.error('Failed to split job:', err);
+      alert('Failed to split job.');
+    }
+  };
+
   // Day note handlers
   const openNoteModal = (date) => {
     const existingNote = dayNotes.find(n => n.note_date === date);
