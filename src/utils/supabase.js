@@ -598,10 +598,19 @@ export async function updateWorkorderLine(lineId, data) {
 
 // Move lines to a different appointment (for splitting)
 export async function moveLinesToAppointment(lineIds, targetAppointmentId) {
-  return supabaseRpc('move_lines_to_appointment', {
-    p_line_ids: lineIds,
-    p_target_appointment_id: targetAppointmentId
+  // Direct update - move lines to new appointment
+  const idsParam = lineIds.join(',');
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?id=in.(${idsParam})`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify({ appointment_id: targetAppointmentId })
   });
+  return res.json();
 }
 
 // Collapse lines back to parent

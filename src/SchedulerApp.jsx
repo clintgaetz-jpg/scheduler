@@ -642,9 +642,16 @@ export default function SchedulerApp() {
       };
       const [childAppointment] = await supabase.insert('appointments', childData);
       if (childAppointment?.id && splitData.lineIds?.length) {
-        await supabase.rpc('move_lines_to_appointment', {
-          p_line_ids: splitData.lineIds,
-          p_target_appointment_id: childAppointment.id
+        // Move lines to child appointment
+        const idsStr = splitData.lineIds.join(',');
+        await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?id=in.(${idsStr})`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ appointment_id: childAppointment.id })
         });
         await supabase.update('appointments', appointment.id, {
           estimated_hours: Math.max(0, (appointment.estimated_hours || 0) - (splitData.totals?.hours || 0)),
