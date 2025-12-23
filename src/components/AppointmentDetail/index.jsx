@@ -161,8 +161,8 @@ export default function AppointmentDetailModal({
   const tech = technicians?.find(t => t.id === editedAppointment.tech_id);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
+      <div className="bg-white rounded-xl shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col overflow-hidden">
         
         {/* Header */}
         <div className="flex items-start justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
