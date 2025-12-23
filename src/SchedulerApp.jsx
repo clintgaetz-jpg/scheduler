@@ -643,7 +643,7 @@ export default function SchedulerApp() {
       const [childAppointment] = await supabase.insert('appointments', childData);
       if (childAppointment?.id && splitData.lineIds?.length) {
         // Move lines to child appointment
-        const idsStr = splitData.lineIds.join(',');
+        const idsStr = splitData.lineIds.map(id => `"${id}"`).join(',');
         await fetch(`${SUPABASE_URL}/rest/v1/workorder_lines?id=in.(${idsStr})`, {
           method: 'PATCH',
           headers: {
