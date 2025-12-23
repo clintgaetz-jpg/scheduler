@@ -561,3 +561,52 @@ export async function bookAppointmentDirect(data) {
     error: result
   };
 }
+
+// ============================================
+// WORKORDER LINES & PARTS
+// ============================================
+
+// Get workorder lines for an appointment (with nested parts)
+export async function getWorkorderLines(appointmentId) {
+  return supabaseFetch(
+    workorder_lines?appointment_id=eq.&select=*,parts:workorder_parts(*)&order=rank
+  );
+}
+
+// Get workorder lines by WO number (with nested parts)
+export async function getWorkorderLinesByWO(workorderNumber) {
+  return supabaseFetch(
+    workorder_lines?workorder_number=eq.&select=*,parts:workorder_parts(*)&order=rank
+  );
+}
+
+// Update a workorder line (scheduler overrides)
+export async function updateWorkorderLine(lineId, data) {
+  const res = await fetch(${SUPABASE_URL}/rest/v1/workorder_lines?id=eq., {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': Bearer ,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+// Move lines to a different appointment (for splitting)
+export async function moveLinesToAppointment(lineIds, targetAppointmentId) {
+  return supabaseRpc('move_lines_to_appointment', {
+    p_line_ids: lineIds,
+    p_target_appointment_id: targetAppointmentId
+  });
+}
+
+// Collapse lines back to parent
+export async function collapseLinesToParent(childAppointmentId, parentAppointmentId) {
+  return supabaseRpc('collapse_lines_to_parent', {
+    p_child_appointment_id: childAppointmentId,
+    p_parent_appointment_id: parentAppointmentId
+  });
+}
